@@ -5,9 +5,14 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12, <3.13"
 dependencies = [
+    "beautifulsoup4>=4.15.0",
     "fastapi[standard]>=0.141.1",
     "google-genai>=2.18.1",
+    "httpx>=0.28.1",
+    "lxml>=6.1.2",
     "pydantic-settings>=2.15.0",
+    "pyyaml>=6.0.3",
+    "tzdata>=2026.3",
 ]
 
 # 앱 런타임과 섞지 않으려고 그룹화

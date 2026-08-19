@@ -1,0 +1,106 @@
+"""CLI.
+
+  python -m crawler list                                   # yaml 소스 목록 + 구현 여부
+  python -m crawler run --source easylaw-pet --dry-run --limit 3
+  python -m crawler run --source easylaw-pet [--force]
+"""
+from __future__ import annotations
+
+import argparse
+import sys
+import traceback
+
+from .core import registry
+from .core.fetch import Fetcher
+from .core.store import Store
+
+
+def cmd_list(_: argparse.Namespace) -> int:
+    seeds = registry.load_seeds()
+    for sid, s in seeds.items():
+        impl = "✓" if registry.resolve(sid) else " "
+        print(f"[{impl}] {sid:28s} {s['domain']:13s} {s['method']:9s} auth={s['auth']:11s} {s['status']}")
+    return 0
+
+
+def cmd_run(args: argparse.Namespace) -> int:
+    src = registry.build(args.source)
+    store = Store(dry_run=args.dry_run, force=args.force)
+    n_fetched = n_changed = n_failed = n_skipped = 0
+
+    with Fetcher() as fetcher:
+        targets = src.discover(fetcher)
+        print(f"[{src.id}] discover: {len(targets)} targets" + (f" (limit {args.limit})" if args.limit else ""))
+        if args.limit:
+            targets = targets[: args.limit]
+
+        for i, t in enumerate(targets, 1):
+            tag = f"[{i}/{len(targets)}] {t.slug}"
+            if not fetcher.allowed(t.url):
+                print(f"{tag}  SKIP robots.txt disallow  {t.url}")
+                store.log(src, t, status=None, result=None, error="robots disallow")
+                n_skipped += 1
+                continue
+            try:
+                res = fetcher.get(t.url)
+            except Exception as e:                        # 재시도 끝에도 실패
+                print(f"{tag}  FAIL {e}")
+                store.log(src, t, status=None, result=None, error=str(e))
+                n_failed += 1
+                continue
+            if not res.ok:
+                print(f"{tag}  HTTP {res.status}  {t.url}")
+                store.log(src, t, status=res.status, result=None, error=f"HTTP {res.status}")
+                n_failed += 1
+                continue
+
+            try:
+                ext = src.extract(res, t)
+            except Exception:
+                print(f"{tag}  EXTRACT ERROR\n{traceback.format_exc()}")
+                store.log(src, t, status=res.status, result=None, error="extract error")
+                n_failed += 1
+                continue
+
+            result = store.save(src, t, res, ext)
+            store.log(src, t, status=res.status, result=result)
+            n_fetched += 1
+            n_changed += int(result.changed)
+
+            state = "NEW" if result.previous_sha256 is None else ("CHANGED" if result.changed else "same")
+            print(f"{tag}  {state:7s} {res.status} {len(res.content):>7,}B  {res.elapsed_sec:.1f}s")
+            if args.dry_run or args.verbose:
+                print(f"        title   : {ext.title}")
+                print(f"        chars   : {len(ext.text):,}   published_at: {ext.published_at}")
+                print(f"        cites   : {len(ext.cites)}  {ext.cites[:4]}")
+                print(f"        preview : {ext.text[:160].replace(chr(10), ' ')}")
+                if ext.extra:
+                    print(f"        extra   : {ext.extra}")
+            elif result.raw_file:
+                print(f"        -> raw/{result.raw_file}")
+
+    print(f"\n[{src.id}] fetched {n_fetched}, changed {n_changed}, failed {n_failed}, skipped {n_skipped}"
+          + ("   (dry-run: nothing written)" if args.dry_run else f"   run_id={store.run_id}"))
+    return 1 if n_failed else 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    p = argparse.ArgumentParser(prog="python -m crawler")
+    sub = p.add_subparsers(dest="cmd", required=True)
+
+    sub.add_parser("list", help="seed_sources.yaml 소스 목록과 구현 여부").set_defaults(fn=cmd_list)
+
+    r = sub.add_parser("run", help="소스 하나 수집")
+    r.add_argument("--source", required=True, help="seed_sources.yaml 의 id")
+    r.add_argument("--limit", type=int, default=0, help="앞에서 N개만")
+    r.add_argument("--dry-run", action="store_true", help="아무것도 쓰지 않고 추출 결과만 출력")
+    r.add_argument("--force", action="store_true", help="sha256 같아도 새 파일로 저장")
+    r.add_argument("-v", "--verbose", action="store_true")
+    r.set_defaults(fn=cmd_run)
+
+    args = p.parse_args(argv)
+    return args.fn(args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

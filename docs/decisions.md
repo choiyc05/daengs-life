@@ -185,3 +185,20 @@ URL에 한글·쿼리스트링이 섞여 Windows 경로로 부적합하다.
 
 **미결 (이 결정에 포함하지 않음)** — PDF 파서 선택(pypdf/pdfplumber/PyMuPDF)은 후보와 판단 재료만
 `data/README.md`에 정리해두고 파싱 단계 착수 시 결정한다. PyMuPDF의 AGPL-3.0이 변수.
+
+---
+
+## D-009. 크롤러 패키지 배치와 소스 모듈 계약 — ✅ 확정 (2026-08-19)
+
+**배치** — `backend/crawler/`. `backend/` 는 FastAPI 폴더가 아니라 uv 프로젝트 하나이고, FastAPI(`app/`, 이동 예정)·`crawler/`·`pipeline/`(예정)·`tasks/`(Phase 3) 가 그 안의 형제 패키지다.
+D-001 "FastAPI 백엔드와 같은 코드베이스/이미지" 의 구체화. 레포 루트에 별도 프로젝트로 두면 venv·lock 2개 + 공유 코드(설정·DB 모델·임베딩)용 세 번째 패키지가 필요해져 혼자 하는 파트 레포에서 과함.
+
+**의존 방향** — `app → crawler`, `tasks → crawler` 한쪽뿐. `crawler` 는 `app`/`tasks` 를 import 하지 않는다 → FastAPI 없이 `python -m crawler` 단독 실행 (D-001 원칙 1).
+
+**의존성 그룹** — 크롤러 의존성(httpx·bs4·lxml·pyyaml·tzdata)은 메인 `dependencies`. `ml` 그룹처럼 분리하지 않는 이유: 가볍고, Celery 워커·관리자 API 가 같은 이미지에서 crawler 를 import 하므로 기본 `uv sync` 에 포함되어야 한다. 그룹 분리는 OCR 엔진·HWP 파서처럼 무겁거나 설치가 까다로운 것이 들어올 때.
+
+**소스 모듈 계약** — 소스 하나 = 모듈 하나 (`sources/{id}.py`, yaml id 의 `-` → `_`). 책임은 `discover()`(URL+slug 목록) 와 `extract()`(제목·본문·published_at·cites) 둘뿐. 받기·저장·로그·변경 감지·예절(UA, 1.5s 간격, robots, 재시도)은 `core/` 가 한다. 소스가 23개가 되어도 각 모듈은 site-specific 지식만 가진다.
+
+**변경 감지 지문** — html 은 `extract().text` 의 sha256, 그 외는 원본 바이트. 조회수·세션값 때문에 바이트 해시는 매번 changed 가 뜬다 (data/README.md 규칙 3 갱신).
+
+**첫 사이클 결과 (easylaw-pet)** — 본문 7 + 100문100답 7 = 14건. 시드 URL 이 '페이지 오류' 를 반환해 정정(`status: verified` 는 조사 시점 기준일 뿐). 100문100답 탭(`&menuType=onhunqna`) 은 Q/A + 관련법령 구조라 D-007 골든셋 재료로 적합. 카드뉴스는 이미지라 제외. 본문 인용 조항을 D-004 형식(`제16조제2항제1호`)으로 `cites` 에 보존 — 해설(`official`) → 법령(`law`) 연결고리.

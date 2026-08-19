@@ -74,34 +74,51 @@ data/
 
    ```json
    {
-     "source_id": "law-animal-protection",
-     "source_url": "https://www.law.go.kr/법령/동물보호법",
-     "document_title": "동물보호법",
-     "source": "법제처 국가법령정보센터",
-     "source_type": "api",
-     "format": "xml",
+     "source_id": "easylaw-pet",
+     "source_url": "https://www.easylaw.go.kr/CSP/CnpClsMain.laf?csmSeq=1809&ccfNo=2&cciNo=2&cnpClsNo=1",
+     "document_title": "반려동물과 생활하기 > … > 반려견과 외출 시 이것만은 챙기세요. (본문)",
+     "source": "법제처 찾기쉬운 생활법령정보",
+     "source_type": "web",
+     "format": "html",
      "category": "policy",
-     "subcategory": "leash-muzzle",
-     "trust_level": "law",
-     "published_at": "2024-04-27",
-     "fetched_at": "2026-08-19T13:00:00+09:00",
-     "sha256": "a3f1c8e2…",
+     "subcategory": "pet-life-guide",
+     "trust_level": "official",
+     "published_at": "2026-07-15",
+     "fetched_at": "2026-08-19T23:41:43+09:00",
+     "sha256": "aca76bff…",
      "license": "공공누리 제1유형",
-     "notes": ""
+     "notes": "",
+
+     "raw_file": "law/easylaw-pet-2-2-1__20260819.html",
+     "run_id": "20260819-234132",
+     "http_status": 200,
+     "content_type": "text/html;charset=UTF-8",
+     "bytes": 121675,
+     "cites": ["동물보호법 제16조제2항제1호", "동물보호법 시행규칙 제11조", "…"],
+     "previous_sha256": null
    }
    ```
 
-   - `sha256`은 **받은 원본 바이트**의 해시. D-001 원칙2의 변경 감지용으로,
-     이전 값과 같으면 재파싱·재임베딩을 건너뛴다.
-     (청크 텍스트 해시인 `documents.content_hash`와는 층위가 다르다 — 그쪽은 중복 적재 방지용)
+   위 블록은 `documents` 컬럼 대응 필드, 아래 블록은 추적용 필드다.
+   `crawler/core/store.py` 가 쓰므로 손으로 만들지 않는다.
+
+   - `sha256`은 **콘텐츠 지문**이다. D-001 원칙2의 변경 감지용으로, 이전 값과 같으면 재파싱·재임베딩을 건너뛴다.
+     - `html` → 소스 모듈 `extract()` 가 뽑은 **본문 텍스트**의 해시. 조회수·세션값 같은 노이즈 때문에
+       원본 바이트를 그대로 해시하면 매번 "변경됨"이 뜨기 때문
+     - `pdf`/`xml`/`json` 등 → 원본 바이트 해시
+     - 청크 텍스트 해시인 `documents.content_hash`와는 층위가 다르다 (그쪽은 중복 적재 방지용)
+   - `cites` — 본문이 인라인 인용한 조항. D-004 `section` 형식(`제16조제2항제1호`)으로 정규화.
+     해설 문서(`trust_level: official`)가 어떤 법령(`law`)에 근거하는지의 연결고리
    - **meta 없는 파일은 인덱싱 금지.** "출처 링크 + 조항 번호를 함께 응답"이 성능 지표라
      출처 없는 문서는 가치가 없음.
 
 4. **크롤 로그** — `manifests/crawl_log.jsonl`. 한 줄에 JSON 객체 하나(JSON Lines), append-only.
 
    ```json
-   {"run_id":"20260819-1300","source_id":"law-animal-protection","url":"https://…","raw_file":"law/animal-protection-act__20260819.xml","status":200,"sha256":"a3f1…","changed":true,"fetched_at":"2026-08-19T13:00:00+09:00","error":null}
+   {"run_id":"20260819-234132","source_id":"easylaw-pet","slug":"easylaw-pet-1-1-1","url":"https://…","raw_file":"law/easylaw-pet-1-1-1__20260819.html","status":200,"sha256":"4bc3…","changed":true,"fetched_at":"2026-08-19T23:41:34+09:00","error":null}
    ```
+
+   `changed:false` 면 `raw_file` 은 null (아무것도 안 씀). 실패면 `status`/`error` 만 채워진다.
 
    `.meta.json`이 **문서의 출처 정보**라면 이쪽은 **실행 이력**이다. 역할이 다르므로 둘 다 둔다.
    특히 404·타임아웃은 파일 자체가 안 생겨서 `.meta.json`이 없으므로, 실패를 기록할 곳은 여기뿐이다.
@@ -162,6 +179,7 @@ DB CHECK 제약과 반드시 일치해야 한다. 표기는 **kebab-case로 통�
 
 | RAG 도메인 | category | subcategory | trust_level |
 |---|---|---|---|
+| 반려동물 생활 종합 해설 (easylaw) | `policy` | `pet-life-guide` | `official` (인용 조문은 `cites`) |
 | 동물등록 | `policy` | `registration` | `law` / `official` |
 | 예방접종 — 법정 의무(광견병) | `policy` | `vaccination` | `law` |
 | 예방접종 — 권장 스케줄 | `policy` | `vaccination-schedule` | `guideline` |

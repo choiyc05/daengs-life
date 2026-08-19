@@ -43,11 +43,14 @@
   domain: law
   org: 법제처 찾기쉬운 생활법령정보
   title: 반려동물과 생활하기 (종합 해설 - 등록/외출/대중교통/사육)
-  url: "https://easylaw.go.kr/CSP/CnpClsMain.laf?popMenu=ov&csmSeq=1809"
+  url: "https://www.easylaw.go.kr/CSP/CnpClsMain.laf?csmSeq=1809&ccfNo=1&cciNo=1&cnpClsNo=1"
   method: html
   auth: none
   status: verified
-  notes: "법령 조문+해설 통합. 정적 HTML이라 크롤 난도 낮음. Phase 1 최우선"
+  notes: "법령 조문+해설 통합. 정적 HTML이라 크롤 난도 낮음. Phase 1 최우선.
+    본문 7p(CnpClsMain ccfNo/cciNo/cnpClsNo) + 카드뉴스 6p(EasyLawInfoR easySeq 2766~2771).
+    URL 목록은 sitemap.xml에서 csmSeq=1809 필터로 얻는다.
+    (2026-08-19 정정: 기존 popMenu=ov&csmSeq=1809 단독 URL은 '페이지 오류' 반환)"
 
 # ---------- 동물등록 ----------
 - id: animal-go-kr

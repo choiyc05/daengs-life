@@ -12,14 +12,14 @@
 - 브랜치에서 작업 후 커밋+푸시 (현재: `feat/data-sources`)
 
 ## 스택
-- backend: FastAPI + uv (Python), LLM은 Gemini API 예정
+- backend: FastAPI + uv (Python), LLM은 Gemini API 예정. `backend/` 는 uv 프로젝트 하나이고 그 안에 `crawler/`(순수 패키지+CLI, D-001 원칙1) 가 있다. 의존 방향은 app→crawler 한쪽뿐. 실행: `cd backend && uv run python -m crawler run --source <id> [--dry-run --limit N]`
 - DB: postgres + **pgvector 0.8.6** — `documents` 테이블: `embedding vector(1024)`, `content_hash`(중복 방지 자연키), category CHECK(policy/travel/food), source_type CHECK(document/web/api/manual), source_url/document_title/section 컬럼 (조항 인용용) — D-008
 - 오케스트레이션: **Celery + Beat + Redis** (D-001 확정 — Airflow 아님)
 - frontend: Next.js (단순 확인용)
 - 로컬: `docker compose up -d` (컨테이너 `daengs_life_db`, DB명 `lifedb`, init은 `db/init/`)
 
 ## 현재 상태 (2026-08-19 기준)
-- 완료: 데이터 소스 조사(`docs/data-sources.md`, 시드 30개 `data/manifests/seed_sources.yaml`), 실시간 API 조사+GPS 결론(`docs/realtime-apis.md`), D-001 오케스트레이션 확정, D-008 저장 규약·스키마 정정 확정, DB 기동·스키마 검증
+- 완료: 데이터 소스 조사(`docs/data-sources.md`, 시드 30개 `data/manifests/seed_sources.yaml`), 실시간 API 조사+GPS 결론(`docs/realtime-apis.md`), D-001 오케스트레이션 확정, D-008 저장 규약·스키마 정정 확정, DB 기동·스키마 검증, **크롤러 뼈대(`backend/crawler/`) + 첫 소스 `easylaw-pet` 14건 수집 (본문 7 + 100문100답 7, 조항 인용 추출)**
 - 논의중(🔶): D-002 임베딩(gemini@1024 기본값→골든셋 3파전 베이크오프), D-003 하이브리드·리랭커, D-004 청킹(조문 단위), D-005 실행순서, D-006 EDA 시스템화, D-007 평가 체계(Hit@5·MRR·LLM judge)
-- 다음 후보: 남은 결정 확정 → Phase 1 크롤러(키 불필요 소스: easylaw·animal.go.kr 등) + Celery 뼈대(crawler 패키지 분리 원칙은 D-001 참고)
+- 다음 후보: Phase 1 나머지 소스(animal.go.kr → 정부24 → nias → 법령 웹 원문) 를 `crawler/sources/` 에 추가 — 절차는 `backend/crawler/README.md`. 그 다음 파싱/청킹(D-004) 으로 첫 RAG 관통
 - 필요 키(.env, 미발급): DATA_GO_KR_KEY, LAW_OC, KAKAO_REST_KEY — 발급처는 docs/data-sources.md §5
