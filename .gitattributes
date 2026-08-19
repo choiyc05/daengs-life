@@ -1,0 +1,27 @@
+# 기본: 텍스트 파일은 저장소에 LF로 저장하고 체크아웃도 LF로 통일
+* text=auto eol=lf
+
+# 셸 스크립트는 항상 LF (Windows에서도)
+*.sh text eol=lf
+
+# Windows 전용 스크립트는 CRLF 유지
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# 바이너리로 취급 (diff/eol 변환 금지)
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+
+# 락 파일은 diff 노이즈 줄이기
+package-lock.json -diff linguist-generated
+uv.lock -diff linguist-generated
