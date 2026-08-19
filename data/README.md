@@ -6,7 +6,7 @@
 
 ```
 data/
-├── manifests/        # 시드 소스 목록(seed_sources.yaml), 크롤 로그
+├── manifests/        # 시드 소스 목록(seed_sources.yaml), 크롤 로그(crawl_log.jsonl)
 ├── raw/              # 크롤링 원본 (PDF/HTML/XML/JSON) — 도메인별 하위 폴더
 │   ├── law/          # 법령 원문 (동물보호법, 가축전염병예방법 …)
 │   ├── registration/ # 동물등록
@@ -15,48 +15,188 @@ data/
 │   ├── transport/    # 대중교통·항공 동반 이동
 │   ├── subsidy/      # 지자체 지원사업 (공고문·조례·보조금24)
 │   └── insurance/    # 펫보험 약관
-├── processed/        # 정제·청킹 결과 (jsonl) — DB 적재 입력
+├── processed/        # 가공 산출물 — 단계별 분리
+│   ├── parsed/       #   텍스트 추출 (jsonl)
+│   ├── chunks/       #   청킹 (jsonl) — DB 적재 입력
+│   └── embeddings/   #   벡터 (parquet)
+├── eval/             # 골든셋 (golden_v1.jsonl) — D-007. git 관리 대상
 └── reference/        # 정적 참조 데이터 (에어코리아 측정소 목록, 기상청 격자 변환표 등)
 ```
+
+### git 추적 범위 (D-008)
+
+| 대상 | 추적 |
+|---|---|
+| `raw/**/*.meta.json` | ✅ 커밋 |
+| `raw/` 원본 파일 (pdf/html/xml/json) | ❌ 무시 |
+| `processed/**` | ❌ 무시 |
+| `manifests/seed_sources.yaml` | ✅ 커밋 |
+| `manifests/crawl_log.jsonl` | ❌ 무시 (실행 로그) |
+| `eval/`, `reference/` | ✅ 커밋 |
+
+**원본을 커밋하지 않는 이유** — 이 레포는 public이다. 정부 자료는 공공누리로 재배포가 되지만
+**펫보험 약관은 보험사 저작물**이라 그대로 올리는 것은 리스크가 있다.
+재현성은 `.meta.json`의 `source_url` + `sha256` + `fetched_at`으로 확보된다
+(D-007이 요구하는 "코퍼스 스냅샷" = 무엇을 언제 받았는지의 기록이지 원본 자체가 아니다).
+
+**대신 감수하는 것** — 공고문이 내려가면 원본을 다시 못 구한다. 로컬 `raw/`는 지우지 말 것.
+
+### 단계를 파일로 끊는 이유
+
+청킹 전략과 임베딩 모델은 여러 번 갈아엎게 된다. 한 덩어리로 짜두면 청크 크기 하나 바꿀 때마다
+정부 사이트를 다시 긁어야 한다. `parsed/`를 따로 남기면 **D-006의 구조 파싱 성공률·스캔 PDF 비율**도
+그 산출물에서 바로 측정된다.
+
+| 무엇을 바꾸면 | 어디부터 다시 돌리나 |
+|---|---|
+| 청크 크기·분할 기준 | `chunks/` |
+| 임베딩 모델 | `embeddings/` |
+| 파서 (HWP 깨짐 수정 등) | `parsed/` |
+| — | 크롤링은 다시 하지 않는다 |
+
+텍스트 단계가 jsonl인 이유는 디버깅·diff가 쉬워서다. 용량이 문제되는 것은 1024차원 벡터뿐이라
+`embeddings/`만 parquet을 쓴다 (`pyproject.toml`의 `ml` 그룹에 `pyarrow` 포함).
+
+---
 
 ## 규칙
 
 1. **원본 불변** — `raw/` 파일은 수정 금지. 재크롤 시 날짜가 다른 새 파일로 저장.
+
 2. **파일명**: `{slug}__{YYYYMMDD}.{ext}` (예: `animal-protection-act__20260819.xml`)
-3. **출처 메타 필수** — 원본 1개당 같은 이름의 `.meta.json` 1개. 스키마는 `documents` 테이블 컬럼에 맞춘다:
+   - `slug`는 `seed_sources.yaml`의 `id`와 대응시킨다.
+   - 지자체 공고처럼 **한 소스에서 문서가 수십 개 쏟아지는 경우**는 slug를 개별로 정할 수 없으므로
+     `{source_id}__{YYYYMMDD}__{urlhash8}.{ext}` 를 쓴다. `urlhash8` = `sha256(url)[:8]`.
+     URL에 한글·쿼리스트링이 섞여 원래 파일명을 그대로 쓸 수 없고, 공공기관 첨부는
+     `공고문.pdf`·`붙임1.pdf` 처럼 이름이 겹쳐 덮어쓰기 때문이다.
+
+3. **출처 메타 필수** — 원본 1개당 같은 이름의 `.meta.json` 1개.
 
    ```json
    {
+     "source_id": "law-animal-protection",
      "source_url": "https://www.law.go.kr/법령/동물보호법",
      "document_title": "동물보호법",
      "source": "법제처 국가법령정보센터",
      "source_type": "api",
+     "format": "xml",
      "category": "policy",
      "subcategory": "leash-muzzle",
-     "fetched_at": "2026-08-19T13:00:00+09:00",
-     "license": "공공누리 제1유형",
      "trust_level": "law",
+     "published_at": "2024-04-27",
+     "fetched_at": "2026-08-19T13:00:00+09:00",
+     "sha256": "a3f1c8e2…",
+     "license": "공공누리 제1유형",
      "notes": ""
    }
    ```
 
-   - `source_type`: `pdf | web | api | manual` (DB CHECK 제약과 동일)
-   - `trust_level`: `law`(법령) > `official`(공공기관 안내) > `guideline`(협회·수의학 가이드) — 접종 스케줄처럼 법정 근거가 없는 문서 구분용
-   - **meta 없는 파일은 인덱싱 금지.** "출처 링크 + 조항 번호를 함께 응답"이 성능 지표라 출처 없는 문서는 가치가 없음.
-4. **대용량 금지** — 파일당 100MB 초과 금지(GitHub 하드리밋). 약관 PDF 수준(수 MB)은 커밋 OK. 무거워지면 Git LFS/외부 스토리지 전환.
-5. **realtime(날씨·대기질)은 저장하지 않는다** — API 직조회 대상. 단, 측정소 목록·격자 변환표 같은 정적 메타는 `reference/`에 캐시 (월 1회 갱신 권장).
+   - `sha256`은 **받은 원본 바이트**의 해시. D-001 원칙2의 변경 감지용으로,
+     이전 값과 같으면 재파싱·재임베딩을 건너뛴다.
+     (청크 텍스트 해시인 `documents.content_hash`와는 층위가 다르다 — 그쪽은 중복 적재 방지용)
+   - **meta 없는 파일은 인덱싱 금지.** "출처 링크 + 조항 번호를 함께 응답"이 성능 지표라
+     출처 없는 문서는 가치가 없음.
 
-## DB category 매핑 (documents.category CHECK 제약 기준)
+4. **크롤 로그** — `manifests/crawl_log.jsonl`. 한 줄에 JSON 객체 하나(JSON Lines), append-only.
 
-| RAG 도메인 | category | subcategory 제안 |
-|---|---|---|
-| 동물등록 | `policy` | `registration` |
-| 예방접종 — 법정 의무(광견병) | `policy` | `vaccination` |
-| 예방접종 — 스케줄·케어 | `care` | `vaccination-schedule` |
-| 목줄·입마개·맹견 | `policy` | `leash-muzzle` |
-| 동반 이동 (철도/지하철/버스/항공/검역) | `travel` | `transport-rail` 등 |
-| 지자체 지원사업 | `policy` | `subsidy` |
-| 펫보험 | `policy` | `insurance` |
+   ```json
+   {"run_id":"20260819-1300","source_id":"law-animal-protection","url":"https://…","raw_file":"law/animal-protection-act__20260819.xml","status":200,"sha256":"a3f1…","changed":true,"fetched_at":"2026-08-19T13:00:00+09:00","error":null}
+   ```
+
+   `.meta.json`이 **문서의 출처 정보**라면 이쪽은 **실행 이력**이다. 역할이 다르므로 둘 다 둔다.
+   특히 404·타임아웃은 파일 자체가 안 생겨서 `.meta.json`이 없으므로, 실패를 기록할 곳은 여기뿐이다.
+   남기지 않으면 재실행할 때마다 죽은 URL을 계속 두드린다.
+
+   - JSON 배열이 아니라 JSONL인 이유: 배열은 파일을 닫아야 완성돼서 크롤 도중 중단되면 통째로 깨진다.
+   - `run_id` 단위 요약은 Postgres `crawl_runs` 테이블에 별도 기록한다 (D-001 원칙3, 관리자페이지용).
+     이 파일은 **문서 단위**, `crawl_runs`는 **실행 단위**로 층위가 다르다.
+
+5. **realtime(날씨·대기질)은 저장하지 않는다** — API 직조회 대상. 10분 뒤면 틀릴 값을 벡터로 박아두면
+   계속 오답을 뱉는다. 단, 측정소 목록·격자 변환표 같은 정적 메타는 `reference/`에 캐시
+   (월 1회 갱신 권장).
+
+---
+
+## 값 사전
+
+DB CHECK 제약과 반드시 일치해야 한다. 표기는 **kebab-case로 통일**한다
+(`raw/` 하위 폴더명과 맞추기 위함). 흔들리면 `(category, subcategory)` 복합 인덱스 필터가 조용히 실패한다.
+
+### category — 대분류 (DB CHECK 있음)
+
+`policy` · `travel` · `food`
+
+> **`care`·`emergency`는 제외했다 (D-008).** 진단 성격이 강해 별도 에이전트로 분리한다.
+> 필요해지면 테이블 재생성 없이 CHECK 제약만 교체하면 된다.
+
+### source_type — 매체 유형 (DB CHECK 있음)
+
+| 값 | 대상 |
+|---|---|
+| `document` | 파일로 배포된 문서 (공고문 PDF/HWP/HWPX, 약관) |
+| `web` | HTML 본문 (기관 웹페이지, 찾기쉬운 생활법령 해설) |
+| `api` | API 응답 (법제처 DRF XML, 공공데이터포털 JSON) |
+| `manual` | 직접 작성·정리 (FAQ, 보정 데이터) |
+
+기존 `pdf`가 `document`로 바뀌었다. `pdf`는 포맷 축이라 `web`·`api`와 기준이 섞여
+"웹에서 받은 PDF"를 어디에 넣을지 답이 안 나왔다. 세부 포맷은 `format`이 담당한다.
+
+### format — 파일 포맷
+
+`pdf` · `hwp` · `hwpx` · `html` · `xml` · `json`
+
+> **HWP와 HWPX는 반드시 구분한다.** HWP는 바이너리(OLE)라 `pyhwp`/`hwp5`가 필요하고 파싱 실패가 잦은 반면,
+> HWPX는 ZIP+XML(국가표준 OWPML)이라 압축을 풀어 파싱하면 되고 훨씬 안정적이다. 파서 코드 경로가 다르다.
+
+### trust_level — 신뢰 등급
+
+`law`(법령) > `official`(공공기관 안내) > `guideline`(협회·수의학 가이드)
+
+법령 원문과 기관 안내페이지를 구분하는 것이 "조항 번호 인용" KPI에 직결된다.
+블로그·유튜브를 넣게 되면 `community`를 추가한다 (현재 시드 30개는 전부 공공·기관 소스).
+
+### subcategory — 세부 분류 (CHECK 없음, 수집하면서 늘려간다)
+
+확정 목록이 아니라 **"지금까지 쓴 값의 기록"** 이다. 값을 추가할 때 이 표를 갱신한다.
+재분류는 `UPDATE` 한 줄이고 `content`가 바뀌지 않으므로 **임베딩 재계산이 필요 없다.**
+
+| RAG 도메인 | category | subcategory | trust_level |
+|---|---|---|---|
+| 동물등록 | `policy` | `registration` | `law` / `official` |
+| 예방접종 — 법정 의무(광견병) | `policy` | `vaccination` | `law` |
+| 예방접종 — 권장 스케줄 | `policy` | `vaccination-schedule` | `guideline` |
+| 목줄·입마개·맹견 | `policy` | `leash-muzzle` | `law` |
+| 동반 이동 (철도/지하철/버스/항공/검역) | `travel` | `transport-rail` 등 | `official` |
+| 지자체 지원사업 | `policy` | `subsidy` | `official` |
+| 펫보험 | `policy` | `insurance` | `official` |
+
+접종 스케줄이 `care`에서 `policy`로 옮겨진 이유 — `care`를 없앤 대신 **`trust_level`이 그 구분을 대신한다.**
+`guideline`은 원래 "접종 스케줄처럼 법정 근거가 없는 문서" 구분용으로 만든 등급이라 역할이 겹쳤다.
+
+---
+
+## PDF 파서 후보 (미결정 — 파싱 단계 착수 시 결정)
+
+셋 다 pip으로 설치하는 Python 라이브러리다.
+
+| | 형태 | 텍스트 품질 | 표 추출 | 속도 | 라이선스 |
+|---|---|---|---|---|---|
+| `pypdf` | 순수 Python | 낮음 (레이아웃 무시) | ❌ | 보통 | BSD |
+| `pdfplumber` | 순수 Python (pdfminer.six 기반) | 높음 | ✅ 강함 | 느림 | MIT |
+| `PyMuPDF` | C 라이브러리(MuPDF) 바인딩 | 높음 | 보통 | 압도적으로 빠름 | ⚠️ AGPL-3.0 |
+
+- 정부 공고문은 **표가 많다** (지원사업 금액표, 접종 일정표, 맹견 목록). 표를 못 뽑으면 셀 값이
+  한 줄로 뭉개져 청크 품질이 무너진다.
+- 속도는 크롤링이 더 느려서 대체로 병목이 아니다.
+- `PyMuPDF`의 AGPL-3.0 — 개인·내부용은 무관하지만 웹 서비스로 배포하면 소스 공개 의무가 생긴다.
+- **스캔 PDF**는 텍스트 레이어가 없어 어떤 파서로도 0자가 나온다. D-006이 비율을 측정하고,
+  D-007 논의에서 나온 Gemini vision OCR 폴백 범위를 그 수치로 정한다.
+- HWP는 `pyhwp`(hwp5) 설치가 까다롭고 실패율이 높다. HWPX는 표준 라이브러리(`zipfile`+`xml.etree`)로 처리된다.
+
+`parsed/` 산출물에 파서 이름·버전을 기록해두면, 파서를 갈아탄 뒤 구버전으로 처리된 문서만 골라 재파싱할 수 있다.
+
+---
 
 시드 소스 목록: [manifests/seed_sources.yaml](manifests/seed_sources.yaml)
 소스 조사 문서: [../docs/data-sources.md](../docs/data-sources.md)
+결정 기록: [../docs/decisions.md](../docs/decisions.md)

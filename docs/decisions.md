@@ -100,3 +100,88 @@
 - 회귀 게이트 2단: **smoke**(고정 미니 코퍼스, 검색 지표만, CI/PR마다 수 분) + **full**(전체 코퍼스 + judge, 수동·야간)
 - 운영 연동: 재적재 완료 → Celery chain으로 검색 eval 자동 실행 → baseline 대비 Hit@5 3%p 하락 시 알림, 관리자페이지에 지표 트렌드
 - 도구: ragas/deepeval 참고만 하고 자체 구현 (지표 특수성 — 인용 정확도 — 및 투명성)
+
+---
+
+## D-008. 데이터 저장 규약 및 documents 스키마 정정 — ✅ 확정 (2026-08-19)
+
+**배경** — `data/README.md`(저장 규칙)와 `db/init/01_schema.sql`(스키마)을 대조하니 어긋난 지점이 여럿이었다.
+main에서 별도로 진행된 스키마 검토 결과를 이 브랜치 규약과 합치면서 아래 9건을 확정한다.
+데이터 적재 전이므로 스키마는 `DROP TABLE documents CASCADE;` 후 `01` → `02` 재실행으로 반영한다.
+
+### 1) 원본은 git에 커밋하지 않는다 — 기존 방침 변경
+
+`raw/`의 원본(pdf/html/xml/json)과 `processed/` 전체를 gitignore하고, **`.meta.json`만 커밋**한다.
+
+- 이 레포는 public이다. 정부 자료는 공공누리로 재배포되지만 **펫보험 약관은 보험사 저작물**이라 리스크가 있다 (시드에 insurance 3건)
+- D-007이 요구하는 "코퍼스 스냅샷"은 `.meta.json`의 `source_url`+`sha256`+`fetched_at`으로 충족된다. 원본 바이트 자체가 필요한 게 아니다
+- 기존의 "파일당 100MB 금지" 규칙은 원본 커밋을 전제한 것이라 함께 폐기
+
+**수용하는 트레이드오프** — 공고문이 내려가면 원본 재취득이 불가능하다. 로컬 `raw/`를 보존 대상으로 취급한다.
+
+### 2) `.meta.json`과 크롤 로그는 역할이 다르다 — 둘 다 유지
+
+`.meta.json` = 문서의 **출처 정보**(인덱싱 게이트) / `manifests/crawl_log.jsonl` = **실행 이력**(재실행 판단).
+사이드카만으로는 404·타임아웃을 기록할 곳이 없다(파일이 안 생기므로 meta도 없음) → 죽은 URL을 매번 재시도하게 된다.
+JSONL인 이유는 배열과 달리 크롤 중단 시 파일이 깨지지 않아서다.
+
+층위 구분: `crawl_log.jsonl`은 **문서 단위**, D-001 원칙3의 `crawl_runs` 테이블은 **실행 단위**(관리자페이지용).
+
+### 3) `category`에서 `care`·`emergency` 제외
+
+`CHECK (category IN ('policy','travel','food'))`.
+진단 성격이 강해 별도 에이전트로 분리한다. `emergency`(응급처치·중독)도 `care`보다 의료적이라 같이 뺐다.
+이 레포의 파트는 제도·문서형이다. 필요해지면 제약만 교체하면 되고, 에이전트가 달라도 테이블을 나눌 필요는 없다(category 필터로 격리).
+
+**"예방접종 스케줄 → care" 매핑은 폐기.** `policy` + `trust_level: guideline`으로 대체한다 —
+`guideline`은 원래 "접종 스케줄처럼 법정 근거가 없는 문서" 구분용으로 만든 등급이라 역할이 겹쳤다.
+
+### 4) 신뢰 등급은 `trust_level` 유지 (`law` > `official` > `guideline`)
+
+main 검토안의 `authority`(official/expert/community)보다 이 도메인에 정확하다.
+**법령 원문과 기관 안내페이지를 구분**하는 것이 조항 인용 KPI에 직결되는데 3단계 안은 둘을 뭉갠다.
+블로그·유튜브 도입 시 `community`를 추가한다.
+
+### 5) `source_type`은 매체 축으로 통일 — `pdf` → `document`
+
+`CHECK (source_type IN ('document','web','api','manual'))`.
+기존 값은 포맷 축(`pdf`)과 수집 채널 축(`web`,`api`)이 섞여 "웹에서 받은 PDF"의 답이 없었고,
+지금 타깃인 정부 공고문이 정확히 그 케이스다. 세부 포맷은 `metadata.format`(`pdf|hwp|hwpx|html|xml|json`)이 담당한다.
+
+`video`/`audio`는 넣지 않는다 — 현재 시드 30개에 영상·음성 소스가 없다. 실제 수집 시 추가.
+포맷을 CHECK가 아니라 metadata에 둔 이유: 포맷은 계속 늘어나(xlsx, pptx…) 그때마다 ALTER가 필요해진다.
+`WHERE metadata @> '{"format":"hwp"}'` 는 기존 GIN 인덱스로 처리된다.
+
+### 6) `documents.content_hash` 컬럼 신설
+
+`content_hash CHAR(64) NOT NULL UNIQUE` — 청크 텍스트의 SHA-256. `ON CONFLICT (content_hash) DO NOTHING`으로 멱등 적재.
+기존 스키마에는 중복을 막을 키가 없어 로더를 두 번 돌리면 행이 2배가 됐다.
+NOT NULL이 필수인 이유: SQL에서 NULL끼리는 중복으로 취급되지 않아 해시가 비면 방어가 조용히 뚫린다.
+metadata에 넣지 않은 이유: JSONB는 NOT NULL·타입을 강제할 수 없고 `\d documents`에도 안 보인다.
+
+**D-001 원칙2의 해시와 층위가 다르다** — 원본 문서 해시(`.meta.json`)는 재파싱·재임베딩 스킵 판단,
+청크 해시(이 컬럼)는 중복 적재 방지. 둘 다 필요하다.
+
+### 7) `subcategory` 표기는 kebab-case, 값은 수집하면서 늘린다
+
+CHECK 제약 없음. `raw/` 하위 폴더명과 표기를 맞춘다(`leash-muzzle`).
+값 사전은 "확정 목록"이 아니라 **"지금까지 쓴 값의 기록"** 으로 운용한다 —
+실제 문서를 보기 전에 짠 분류는 대개 어긋나고, 재분류는 `UPDATE` 한 줄이며 `content`가 안 바뀌므로 **임베딩 재계산이 불필요**하다.
+
+### 8) 가공 산출물은 단계별로 분리
+
+`processed/` 를 `parsed/`(텍스트 추출) → `chunks/`(청킹) → `embeddings/`(벡터)로 나눈다.
+파서를 교체하면 `parsed/`부터, 청크 크기를 바꾸면 `chunks/`부터만 다시 돌리면 되고 크롤링은 재실행하지 않는다.
+**D-006의 "구조 파싱 성공률"·"스캔 PDF 비율"은 `parsed/` 산출물이 따로 남아야 측정 가능하다.**
+포맷은 jsonl(디버깅·diff 용이), 1024차원 벡터만 parquet.
+
+### 9) 대량 문서 소스의 파일명 보완
+
+기본은 기존 규칙 `{slug}__{YYYYMMDD}.{ext}`.
+지자체 공고처럼 한 소스에서 문서가 수십 개 쏟아져 slug를 개별 부여할 수 없는 경우
+`{source_id}__{YYYYMMDD}__{urlhash8}.{ext}` (`urlhash8` = `sha256(url)[:8]`)를 쓴다.
+원래 파일명을 못 쓰는 이유: 공공기관 첨부는 `공고문.pdf`·`붙임1.pdf` 처럼 겹쳐 덮어쓰고,
+URL에 한글·쿼리스트링이 섞여 Windows 경로로 부적합하다.
+
+**미결 (이 결정에 포함하지 않음)** — PDF 파서 선택(pypdf/pdfplumber/PyMuPDF)은 후보와 판단 재료만
+`data/README.md`에 정리해두고 파싱 단계 착수 시 결정한다. PyMuPDF의 AGPL-3.0이 변수.
