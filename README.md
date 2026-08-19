@@ -17,3 +17,8 @@ daengs 생활 비서 AI
 
 ### Frontend
 - 단순 확인용 웹 페이지만 있으면 됨
+
+### 작업 문서
+- [docs/data-sources.md](docs/data-sources.md) : 제도·문서형 RAG 데이터 소스 조사 (크롤링 어디서?)
+- [docs/realtime-apis.md](docs/realtime-apis.md) : 실시간 조회(날씨·대기질) API + GPS 정밀도 결론
+- [data/README.md](data/README.md) : 크롤링 데이터 저장 규칙 (meta.json 필수)

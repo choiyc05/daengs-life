@@ -1,0 +1,9 @@
+# docs/
+
+| 문서 | 내용 |
+|---|---|
+| [data-sources.md](data-sources.md) | 제도·문서형 RAG 데이터 소스 조사 — 도메인별 크롤링 소스, 수집 전략, 키 발급 체크리스트 (2026-08-19) |
+| [realtime-apis.md](realtime-apis.md) | 실시간 조회(날씨·대기질) API 정리 + GPS 정밀도 결론 + 산책지수 입력 매핑 (2026-08-19) |
+
+데이터 저장 규칙: [../data/README.md](../data/README.md)
+시드 소스 목록: [../data/manifests/seed_sources.yaml](../data/manifests/seed_sources.yaml)
