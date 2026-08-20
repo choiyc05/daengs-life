@@ -45,17 +45,18 @@
 - [x] **`law-livestock-epidemic`** — 가축전염병 예방법 / 시행령 / 시행규칙 · `html` · 키없음 · ✅확인
       → **2026-08-20 수집 완료: 3건** (조문 95 + 33 + 97). 요확인이었던 URL 검증도 이때 해소
 - [ ] **`law-drf-api`** — 국가법령정보 공동활용 Open API (lawSearch / lawService) · `api` · 🔑`LAW_OC` · ✅확인
+      → **코드 준비 완료** (`sources/law/law_drf_api.py`, 8개 법령). 키만 넣으면 실행된다.
+      ⚠️ 실제 응답으로 돌려본 적 없음 — 키 발급 후 `--dry-run` 확인 항목이 모듈 docstring 에 있다 ([D-012](decisions.md))
 
 ### 수집 대상 법령
 
 - [x] **동물보호법 / 시행령 / 시행규칙** — 등록 의무(제15조), 안전조치(목줄 2m), 맹견 5종(시행규칙 제2조), 맹견사육허가제(2024.4.27 시행), 맹견 책임보험, 과태료 → 등록·맹견 도메인
 - [x] **가축전염병 예방법 / 시행령 / 시행규칙** — 광견병(제2종 가축전염병) 예방접종 명령 → 접종 도메인
-- [ ] **수의사법** — 진료·처방 → 접종·의료
-- [ ] **자연공원법** — 국립공원 등 반려동물 출입 제한 → 이동·산책
+- [ ] **수의사법** — 진료·처방 → 접종·의료 (`law-drf-api` 대상에 포함, 키 대기)
+- [ ] **자연공원법** — 국립공원 등 반려동물 출입 제한 → 이동·산책 (`law-drf-api` 대상에 포함, 키 대기)
 - [ ] **자치법규(조례)** — `target=ordin&query=반려동물` 전수 → 지자체 지원 (§6 에서 체크)
 
-> 위 4건은 `law-animal-protection` / `law-livestock-epidemic` 과 같은 방식(law.go.kr 웹 원문)으로 지금 바로 받을 수 있다.
-> 조례 전수만 API(🔑`LAW_OC`) 가 필요하다 — 검색으로 목록을 얻어야 하는데 웹은 그게 안 된다.
+> 조례 전수는 API(🔑`LAW_OC`) 가 필수다 — 검색으로 목록을 얻어야 하는데 웹 원문은 그게 안 된다.
 
 ### 노트
 - Open API: [open.law.go.kr](https://open.law.go.kr/LSO/openApi/guideResult.do) 로그인 → OPEN API 신청 → **OC(이메일 ID)** 발급, 무료
@@ -193,6 +194,9 @@
 
 - [ ] **`LAW_OC`** — [open.law.go.kr](https://open.law.go.kr/LSO/openApi/guideResult.do) → OPEN API 신청 · 즉시 발급
       → 막고 있는 것: `law-drf-api`, `ordinance-search` (법령·조례 조문 API)
+      ⚠️ **OC 문자열만으로는 안 된다** — 신청할 때 호출할 **서버의 IP/도메인을 등록**해야 하고,
+      등록 없이 호출하면 HTTP 200 에 "사용자 정보 검증에 실패하였습니다" XML 이 온다.
+      개발 PC 에서 돌리려면 그 PC 의 공인 IP 도 등록할 것 (2026-08-20 실제 응답으로 확인)
 - [ ] **`DATA_GO_KR_KEY`** — data.go.kr 회원가입 → 각 API "활용신청" · 자동승인, 즉시
       → 막고 있는 것: `data-registration-lookup`, `benefit24-services` + 실시간 5건
 - [ ] **`KAKAO_REST_KEY`** — developers.kakao.com · 즉시

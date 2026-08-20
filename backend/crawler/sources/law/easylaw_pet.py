@@ -18,9 +18,9 @@ from urllib.parse import parse_qs, urljoin, urlsplit
 
 from bs4 import BeautifulSoup
 
-from ..core import textutil
-from ..core.fetch import FetchResult, Fetcher
-from .base import Extracted, Source, Target
+from ...core import textutil
+from ...core.fetch import FetchResult, Fetcher
+from ..base import Extracted, Source, Target
 
 BASE = "https://www.easylaw.go.kr"
 CSM_SEQ = "1809"

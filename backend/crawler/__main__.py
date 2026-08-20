@@ -10,9 +10,15 @@ import argparse
 import sys
 import traceback
 
-from .core import registry
+from .core import config, registry
 from .core.fetch import Fetcher
 from .core.store import Store
+
+# 윈도우 콘솔의 기본 인코딩(cp949)으로는 한글 안내 메시지가 깨지고 일부 기호는 아예 예외를 낸다.
+# errors="replace" 라 어떤 터미널에서도 출력 때문에 죽지는 않는다.
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
 
 
 STATE_LABEL = {
@@ -27,7 +33,7 @@ STATE_LABEL = {
 def cmd_list(_: argparse.Namespace) -> int:
     seeds = registry.load_seeds()
     for sid, s in seeds.items():
-        impl = "x" if registry.resolve(sid) else " "     # ASCII 고정 — 윈도우 cp949 콘솔이 못 찍는다
+        impl = "x" if registry.resolve(s) else " "       # ASCII 고정 — 윈도우 cp949 콘솔이 못 찍는다
         print(f"[{impl}] {sid:28s} {s['domain']:13s} {s['method']:9s} auth={s['auth']:11s} {s['status']}")
     return 0
 
@@ -38,7 +44,12 @@ def cmd_run(args: argparse.Namespace) -> int:
     n_fetched = n_changed = n_failed = n_skipped = n_restored = 0
 
     with Fetcher() as fetcher:
-        targets = src.discover(fetcher)
+        try:
+            targets = src.discover(fetcher)
+        except RuntimeError as e:
+            # 키 미설정·시드 URL 사망처럼 '고쳐야 실행되는' 조건. 스택트레이스 대신 안내만 낸다.
+            print(f"[{src.id}] 수집 불가\n  {e}", file=sys.stderr)
+            return 2
         print(f"[{src.id}] discover: {len(targets)} targets" + (f" (limit {args.limit})" if args.limit else ""))
         if args.limit:
             targets = targets[: args.limit]
@@ -46,7 +57,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         for i, t in enumerate(targets, 1):
             tag = f"[{i}/{len(targets)}] {t.slug}"
             if not fetcher.allowed(t.url):
-                print(f"{tag}  SKIP robots.txt disallow  {t.url}")
+                print(f"{tag}  SKIP robots.txt disallow  {config.redact(t.url)}")
                 store.log(src, t, status=None, result=None, error="robots disallow")
                 n_skipped += 1
                 continue
@@ -58,7 +69,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                 n_failed += 1
                 continue
             if not res.ok:
-                print(f"{tag}  HTTP {res.status}  {t.url}")
+                print(f"{tag}  HTTP {res.status}  {config.redact(t.url)}")
                 store.log(src, t, status=res.status, result=None, error=f"HTTP {res.status}")
                 n_failed += 1
                 continue

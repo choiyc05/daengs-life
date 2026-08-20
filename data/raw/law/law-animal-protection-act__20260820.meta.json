@@ -9,12 +9,12 @@
   "subcategory": "animal-protection-act",
   "trust_level": "law",
   "published_at": "2026-07-07",
-  "fetched_at": "2026-08-20T09:43:20+09:00",
+  "fetched_at": "2026-08-20T09:59:13+09:00",
   "sha256": "92f7ab8cdd9211751a04ff428c02563cd75b1e1320422d7886e6de2233d43dd0",
   "license": "공공누리 제1유형",
   "notes": "",
   "raw_file": "law/law-animal-protection-act__20260820.html",
-  "run_id": "20260820-094315",
+  "run_id": "20260820-095908",
   "http_status": 200,
   "content_type": "text/html;charset=UTF-8",
   "bytes": 424705,
@@ -63,5 +63,5 @@
     "동물보호법 제32조제1항",
     "동물보호법 제69조제1항"
   ],
-  "previous_sha256": null
+  "previous_sha256": "92f7ab8cdd9211751a04ff428c02563cd75b1e1320422d7886e6de2233d43dd0"
 }

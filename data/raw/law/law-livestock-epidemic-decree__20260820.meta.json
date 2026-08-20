@@ -9,12 +9,12 @@
   "subcategory": "livestock-epidemic-act",
   "trust_level": "law",
   "published_at": "2026-04-21",
-  "fetched_at": "2026-08-20T09:43:39+09:00",
+  "fetched_at": "2026-08-20T09:59:23+09:00",
   "sha256": "add8e227b7c6ab8dbfe076fbf0a3dea8558411bb51a21f4f7c43402bfc9a2c3f",
   "license": "공공누리 제1유형",
   "notes": "",
   "raw_file": "law/law-livestock-epidemic-decree__20260820.html",
-  "run_id": "20260820-094333",
+  "run_id": "20260820-095917",
   "http_status": 200,
   "content_type": "text/html;charset=UTF-8",
   "bytes": 266751,
@@ -42,5 +42,5 @@
     "가축전염병 예방법 제20조제1항",
     "가축전염병 예방법 제28조"
   ],
-  "previous_sha256": null
+  "previous_sha256": "add8e227b7c6ab8dbfe076fbf0a3dea8558411bb51a21f4f7c43402bfc9a2c3f"
 }

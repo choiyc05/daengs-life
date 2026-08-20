@@ -107,13 +107,15 @@ class Store:
         meta = {
             # --- data/README.md 규칙 3 필드 (documents 컬럼 대응) ---
             "source_id": src.id,
-            "source_url": res.final_url,
+            "source_url": config.redact(res.final_url),
             "document_title": (ext.title if ext else None) or target.meta.get("title"),
             "source": src.org,
             "source_type": src.source_type,
             "format": src.format,
             "category": src.category,
-            "subcategory": src.subcategory,
+            # 한 소스가 여러 법령을 받는 경우(law-drf-api)처럼 문서마다 분류가 다를 수 있다.
+            # 대상이 알려주면 그 값을, 아니면 소스의 기본값을 쓴다.
+            "subcategory": target.meta.get("subcategory") or src.subcategory,
             "trust_level": src.trust_level,
             "published_at": (ext.published_at if ext else None) or target.meta.get("published_at"),
             "fetched_at": now_kst().isoformat(timespec="seconds"),
@@ -143,7 +145,7 @@ class Store:
             "run_id": self.run_id,
             "source_id": src.id,
             "slug": target.slug,
-            "url": target.url,
+            "url": config.redact(target.url),
             "raw_file": result.raw_file if result else None,
             "status": status,
             "sha256": result.sha256 if result else None,
