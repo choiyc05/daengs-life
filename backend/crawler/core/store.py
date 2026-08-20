@@ -63,6 +63,7 @@ class StoreResult:
 
 class Store:
     def __init__(self, *, dry_run: bool = False, force: bool = False) -> None:
+        config.require_data_dir()           # 여기서 막아야 RAW_DIR 가 None 인 채로 흘러가지 않는다
         self.dry_run = dry_run
         self.force = force
         self.run_id = now_kst().strftime("%Y%m%d-%H%M%S")

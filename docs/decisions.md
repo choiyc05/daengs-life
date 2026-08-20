@@ -326,3 +326,57 @@ D-011 의 웹 원문을 대체하지 않는다. 웹은 사람이 열 수 있는 
 - `verify_citations` — 인용 조문의 실존+내용을 대조해 LLM 환각을 잡는다. **우리 KPI(출처 링크 + 조항 번호 인용)와 D-007 평가 체계에 직결**된다. 크롤링이 아니라 답변 검증 단계의 후보로 남겨 둔다
 - 법제처 42개 API 카탈로그 — `ordinance-search`(조례 전수) 설계 시 참고
 - 그쪽 README 의 "보안 High — 타임아웃/네트워크 에러에 API 키 포함 URL 이 로그로 유출 → `maskSensitiveUrl()` 로 `OC=***` 마스킹" 은 D-012 에서 우리가 선제적으로 넣은 `config.redact()` 와 같은 문제다. 실제로 사고가 나는 지점이라는 방증
+
+---
+
+## D-014. env 파일 배치와 의존 방향 가드 — ✅ 확정 (2026-08-20)
+
+### 1) env 경계는 "런타임 단위"다 — `backend/.env` 하나
+
+기존 관례("각 프로젝트 최상단에 그 프로젝트가 쓰는 `.env`")를 따른다. 관건은 **여기서 프로젝트를 몇 개로 세느냐**인데, `backend/` 는 사람이 보기엔 crawler(순수 py) + FastAPI 둘이 합쳐진 느낌이지만 **배포 단위는 하나**다 — D-001 에서 크롤러는 FastAPI 와 같은 이미지에 싣기로 했고, Celery 워커가 `crawler` 를 import 해서 태스크를 돌린다.
+
+| 런타임 단위 | 프로세스 | env |
+|---|---|---|
+| backend 이미지 | FastAPI · Celery worker · beat · `python -m crawler` | `backend/.env` |
+| frontend 이미지 | Next.js | `frontend/.env` |
+| 인프라 | postgres, redis | 루트 `.env` (compose 가 읽는다) |
+
+`crawler/.env` 를 따로 두지 않는 이유 — Celery 워커는 크롤러와 앱을 다 import 하므로 어차피 두 파일을 다 읽어야 한다. 노출 범위는 안 줄고 관리할 파일만 는다.
+
+**변수마다 집은 하나다.** 루트 = 인프라가 *만드는* 값(`POSTGRES_*`), `backend/.env` = 백엔드가 *쓰는* 값(API 키). DB 접속정보는 루트에만 두고 compose 가 `DATABASE_URL` 로 조립해 내려준다. 같은 값을 두 파일에 적으면 한쪽만 고쳐서 어긋난다.
+
+`env_file: ./backend/.env` 는 안전하다 — 위험한 건 **모든 서비스가 루트 `.env` 하나를 통째로 보는** 구성이다(프론트 컨테이너가 `POSTGRES_PASSWORD` 와 `LAW_OC` 까지 받게 된다). 파일을 배포 단위별로 나누면 그 문제가 구조적으로 막힌다.
+
+`.gitignore` 는 손댈 필요가 없다 — `.env` · `.env.*` 는 슬래시가 없어 모든 하위 경로에 적용되고 `!.env.example` 도 마찬가지다.
+
+### 2) 읽는 순서와 `REPO_ROOT` 선택화 (컨테이너 import 크래시 수정)
+
+**우선순위: 실제 환경변수 > `backend/.env` > 루트 `.env`** (`setdefault` 라 먼저 읽은 쪽이 이긴다). 배포에서는 오케스트레이터가 넣은 값이 항상 이기므로 두 파일이 없어도 그대로 돈다.
+
+기준점은 `PACKAGE_ROOT = config.py 에서 세 단계 위` = `backend/`. 레포를 통째로 두든 `backend/` 만 이미지에 넣든 **항상 존재하는** 유일한 경로다.
+
+이 과정에서 배포를 막는 버그를 하나 잡았다. `_find_repo_root()` 가 `data/manifests/seed_sources.yaml` 을 못 찾으면 예외를 냈는데, 그게 **모듈 import 시점**이었다. 백엔드 이미지에는 `data/` 가 없고 `app → crawler` (D-009) 라 **FastAPI 를 import 하는 순간 컨테이너가 안 뜬다.** 재현 결과:
+
+| 상황 | 수정 전 | 수정 후 |
+|---|---|---|
+| `data/` 없이 import | 💥 크래시 | ✅ 통과 (`REPO_ROOT=None`) |
+| `DAENGS_DATA_DIR` 만 지정 | 💥 여전히 크래시 | ✅ 통과 |
+| 데이터가 실제로 필요한 시점 | — | ✅ 무엇을 설정해야 하는지 안내하며 실패 |
+
+`REPO_ROOT` 는 `.env` 경로에만 필요한데 조건 없이 먼저 계산하고 있었다. 이제 `Path | None` 이고, `data/` 를 처음 건드리는 두 지점(`registry.load_seeds()`, `Store.__init__`)에서 `require_data_dir()` 이 검사한다. 배포 시 `DAENGS_DATA_DIR=/data` + 볼륨 마운트 하나로 끝난다.
+
+### 3) 의존 방향을 사람이 아니라 기계가 지킨다
+
+`app → crawler` 한 방향(D-009)은 지금까지 **사람이 지키는 규칙**이었다. 한 번 뒤집히면 크롤러가 앱 설정·DB 세션을 끌고 들어와 CLI 도 워커도 앱 전체를 세워야 돌아간다(D-001 원칙 1 위반).
+
+`backend/tests/test_import_direction.py` 가 `crawler/**/*.py` 의 import 문을 **AST 로 정적 검사**한다. 실제로 import 해서 `sys.modules` 를 보는 방식은 함수 안에 숨은 import 를 놓치고 테스트 프로세스 상태에 영향을 받는다.
+
+테스트가 2개인 이유 — 하나는 위반을 검사하고, 다른 하나는 **검사기 자체가 살아 있는지** 확인한다(일부러 위반 파일을 만들어 잡히는지 본다). 이게 없으면 검사기가 조용히 아무것도 안 보게 돼도 테스트는 계속 통과한다. 실제 `crawler/core/` 에 위반 파일을 넣어 잡히는 것까지 확인했다.
+
+`pytest` 는 `dev` 그룹에 추가했다 (`uv sync --group dev`, 실행은 `uv run pytest`). 런타임 의존성은 그대로 얇다.
+
+### 4) 진짜로 쪼갤 시점
+
+지금 합쳐 두는 것이 맞지만, 다음 중 하나가 오면 이미지를 분리한다 — **크롤러에만 무겁거나 설치가 까다로운 의존성**(HWP 파서·OCR)이 필요해질 때, 또는 **크롤러만 스케일·스케줄이 달라질 때**. 그때도 레포는 하나로 두고 `uv sync --group crawl` 로 이미지만 나눈다. D-009 가 잡아 둔 의존성 그룹 분리 기준과 같다.
+
+**compose 에 backend 서비스를 추가하는 것은 이번 범위 밖이다** (지금은 db 만 있다).

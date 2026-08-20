@@ -21,6 +21,7 @@ from ..sources.base import Source
 
 
 def load_seeds() -> dict[str, dict[str, Any]]:
+    config.require_data_dir()               # data/ 를 처음 건드리는 지점
     with config.SEED_FILE.open(encoding="utf-8") as f:
         items = yaml.safe_load(f)
     return {it["id"]: it for it in items}

@@ -18,6 +18,9 @@ dependencies = [
 # 앱 런타임과 섞지 않으려고 그룹화
 # `uv sync --group ml`을 해야 설치.
 [dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
 ml = [
     "torch>=2.6",
     "sentence-transformers>=3.4",

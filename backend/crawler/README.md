@@ -43,11 +43,30 @@ crawler/
 registry 는 모듈 안에서 `__module__` 이 그 모듈인 `Source` 하위 클래스를 찾는다 —
 `_lawgokr.py` 에서 import 해 온 베이스 클래스는 자동으로 걸러지므로 상속해도 충돌하지 않는다.
 
-## API 키
+## API 키와 경로
 
-`.env` (레포 루트)에 넣으면 `core/config.py` 가 읽는다. 이름은 `docs/data-sources.md` §9 와 같다.
+`backend/.env` 에 넣는다 (`backend/.env.example` 참고). 이름은 `docs/data-sources.md` §9 와 같다.
+
+읽는 순서는 **실제 환경변수 > `backend/.env` > 레포 루트 `.env`** (D-014).
+배포에서는 오케스트레이터가 넣은 환경변수가 항상 이기므로 파일이 없어도 그대로 돈다.
+
 **키가 URL 에 들어가는 소스는 저장·로그·출력 전에 `config.redact()` 를 통과한다** — `.meta.json` 은
 git 에 커밋되므로(D-008) 가리지 않으면 키가 그대로 올라간다. 새 API 소스를 만들 때 확인할 것.
+
+`data/` 위치는 레포 안에서 실행하면 자동으로 찾는다. 레포 밖(컨테이너)에서는 `DAENGS_DATA_DIR` 로
+알려준다 — 안 주면 `require_data_dir()` 이 안내와 함께 실패한다. **import 는 실패하지 않는다**:
+백엔드 이미지에는 `data/` 가 없고 `app → crawler` 라, import 시점에 터지면 컨테이너가 안 뜬다.
+
+## 테스트
+
+```bash
+uv sync --group dev
+uv run pytest
+```
+
+`tests/test_import_direction.py` 가 `crawler` 안의 import 문을 AST 로 훑어 `app`·`tasks`·`main` 을
+끌어다 쓰지 않는지 검사한다 (D-009 의존 방향, D-014). 검사기가 살아 있는지 확인하는 테스트가
+한 개 더 있다 — 검사기가 조용히 아무것도 안 보게 되면 그쪽이 먼저 실패한다.
 
 ## 실행
 

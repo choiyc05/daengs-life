@@ -22,4 +22,6 @@
 - 완료: 데이터 소스 조사(`docs/data-sources.md`, 시드 30개 `data/manifests/seed_sources.yaml`), 실시간 API 조사+GPS 결론(`docs/realtime-apis.md`), D-001 오케스트레이션 확정, D-008 저장 규약·스키마 정정 확정, DB 기동·스키마 검증, **크롤러 뼈대(`backend/crawler/`) + 첫 소스 `easylaw-pet` 14건 수집 (본문 7 + 100문100답 7, 조항 인용 추출)**
 - 논의중(🔶): D-002 임베딩(gemini@1024 기본값→골든셋 3파전 베이크오프), D-003 하이브리드·리랭커, D-004 청킹(조문 단위), D-005 실행순서, D-006 EDA 시스템화, D-007 평가 체계(Hit@5·MRR·LLM judge)
 - 다음 후보: Phase 1 나머지 소스(animal.go.kr → 정부24 → nias → 법령 웹 원문) 를 `crawler/sources/` 에 추가 — 절차는 `backend/crawler/README.md`. 그 다음 파싱/청킹(D-004) 으로 첫 RAG 관통
-- 필요 키(.env, 미발급): DATA_GO_KR_KEY, LAW_OC, KAKAO_REST_KEY — 발급처는 docs/data-sources.md §5
+- 필요 키(**`backend/.env`**, 미발급): DATA_GO_KR_KEY, LAW_OC, KAKAO_REST_KEY — 발급처는 docs/data-sources.md §9
+  - env 배치는 배포 단위 기준(D-014): 루트 `.env`=인프라(compose), `backend/.env`=백엔드 런타임, `frontend/.env`=프론트
+  - 읽는 순서 실제 환경변수 > `backend/.env` > 루트 `.env`. 컨테이너에선 `DAENGS_DATA_DIR` 로 data/ 위치 지정
