@@ -7,7 +7,9 @@
 ## 작업 방식 (중요)
 - 파트별 **논의 → `docs/decisions.md`에 결정 기록(ADR) → 구현** 순서. 사용자가 명시하기 전에 구현으로 넘어가지 말 것
 - 결정 상태: ✅ 확정 / 🔶 제안(논의중). 논의 결과는 decisions.md에 반영하고 커밋
-- 크롤링 산출물은 `data/` (규칙: `data/README.md` — 원본 불변, `.meta.json` 필수, meta 없으면 인덱싱 금지, **원본은 git 미추적**)
+- 크롤링 산출물은 `data/` (규칙: `data/README.md` — 원본 불변, `.meta.json` 필수, meta 없으면 인덱싱 금지,
+  **`data/` 의 수집 결과물은 전부 git 미추적** — 원본·meta·크롤로그 모두 로컬 상태다 (D-017).
+  추적하는 것은 `seed_sources.yaml` 과 `.gitkeep` 뿐)
 - 조사·설계 문서는 `docs/` (인덱스: `docs/README.md`)
 - 브랜치에서 작업 후 커밋+푸시 (현재: `feat/data-sources`)
 

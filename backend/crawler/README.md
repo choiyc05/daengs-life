@@ -7,7 +7,7 @@ crawler/
 ├── __init__.py        패키지 설명 (최상위만 둔다. core/·sources/ 는 빈 __init__ 없이 namespace 서브패키지)
 ├── __main__.py        CLI: list / run  — `python -m crawler` 의 진입점
 ├── core/                                  ← 모든 소스가 공유. 고치면 전부에 적용된다
-│   ├── config.py      경로(REPO_ROOT/DATA_DIR), UA, 요청 간격
+│   ├── config.py      Settings(pydantic-settings) — .env, API 키, 경로, UA, 요청 간격
 │   ├── fetch.py       Fetcher — UA·호스트별 1.5s 간격·재시도·robots.txt
 │   ├── store.py       raw/ 저장 + .meta.json + crawl_log.jsonl, sha256 변경 감지
 │   ├── textutil.py    블록 단위 본문 추출 + 「법령」 조항 인용 파싱 (한국 법령 문서 공통)
@@ -54,8 +54,9 @@ registry 는 모듈 안에서 `__module__` 이 그 모듈인 `Source` 하위 클
 두 파일은 병합된다 — 루트에만 있는 값도 올라오고, 겹치면 backend 쪽이 이긴다.
 배포에서는 오케스트레이터가 넣은 환경변수가 항상 이기므로 파일이 없어도 그대로 돈다.
 
-**키가 URL 에 들어가는 소스는 저장·로그·출력 전에 `config.redact()` 를 통과한다** — `.meta.json` 은
-git 에 커밋되므로(D-008) 가리지 않으면 키가 그대로 올라간다. 새 API 소스를 만들 때 확인할 것.
+**키가 URL 에 들어가는 소스는 저장·로그·출력 전에 `config.redact()` 를 통과한다.**
+`.meta.json` 은 이제 커밋되지 않지만(D-017), 키가 박힌 URL 은 그대로 재사용 가능한 자격증명이라
+로컬 파일·로그·화면 어디에도 남기지 않는다. 새 API 소스를 만들 때 확인할 것.
 
 `data/` 위치는 레포 안에서 실행하면 자동으로 찾는다. 레포 밖(컨테이너)에서는 `DAENGS_DATA_DIR` 로
 알려준다 — 안 주면 `require_data_dir()` 이 안내와 함께 실패한다. **import 는 실패하지 않는다**:
@@ -99,8 +100,9 @@ uv run python -m crawler run --source easylaw-pet --force       # sha256 같고 
 3. **시험** — `--dry-run --limit 3`. 제목이 비거나 메뉴가 본문으로 잡히면 여기서 잡는다.
    API 소스는 여기서 `.meta.json` 의 `source_url` 에 키가 가려졌는지 반드시 눈으로 확인.
 4. **수집** — `run --source {id}`. `data/raw/{domain}/` 에 원본 + meta, `crawl_log.jsonl` 에 한 줄씩.
-5. **커밋** — `git add data/` 하면 `.gitignore` 가 원본은 막고 `.meta.json` 만 올린다.
-   `data/README.md` 값 사전(subcategory 표)에 새 값 추가.
+5. **기록** — `data/` 의 수집 결과물은 **커밋하지 않는다** (원본·meta·크롤로그 전부 로컬, D-017).
+   대신 `docs/data-sources.md` 체크리스트에 수집 완료를 표시하고,
+   `data/README.md` 값 사전(subcategory 표)에 새 값을 추가한다.
 
 소스 모듈은 site-specific 지식만 가진다. 받기·저장·로그·변경 감지·예절은 전부 `core/` — 고치면 모든 소스에 적용된다.
 
@@ -113,8 +115,8 @@ uv run python -m crawler run --source easylaw-pet --force       # sha256 같고 
 - 같은 slug 의 최신 `.meta.json` 과 지문이 같으면 아무것도 안 쓰고 로그만 `changed:false`.
   다르면 오늘 날짜로 새 파일 (옛 파일 보존 — 원본 불변).
 - **지문이 같아도 meta 의 `raw_file` 이 디스크에 없으면 다시 받는다** (D-010, 출력 라벨 `RAW-MISSING`).
-  원본은 git 미추적이라 다른 PC 에서 clone 하면 meta 만 있고 원본이 없다 — 그대로 두면 전부 `same` 으로
-  스킵돼 파싱 단계가 빈손이 된다. `--force` 없이 그냥 `run` 하면 없는 것만 채워진다.
+  `data/` 를 PC 사이에 복사했거나 용량 때문에 원본만 지운 경우, 그대로 두면 전부 `same` 으로 스킵돼
+  파싱 단계가 빈손이 된다. `--force` 없이 그냥 `run` 하면 없는 것만 채워진다.
 - 왜 받았는지는 `crawl_log.jsonl` 의 `reason`: `new`/`changed`/`raw-missing`/`forced`/`same`.
 - `Fetcher` 는 4xx 는 즉시 반환(재시도 무의미), 5xx·네트워크 오류만 지수 백오프 3회.
 - 시간대는 `Asia/Seoul` 고정. Windows 에는 tz DB 가 없어 `tzdata` 패키지가 의존성에 들어 있다.
