@@ -37,6 +37,7 @@
 2. **파서** → `data/processed/parsed/` (경로 2개: API XML / easylaw HTML)
 3. **청커** → `data/processed/chunks/*.jsonl` · **검문소① 질문 1~7의 정답 청크가 하나씩 실재하는지 눈으로 확인**
 4. **임베딩 3종** → `data/processed/embeddings/{model}.parquet` (DB 밖 오프라인, D-002)
+   `BAAI/bge-m3`(기준선) · `nlpai-lab/KURE-v1`(한국어 튜닝, bge-m3 파생) · `Qwen/Qwen3-Embedding-0.6B`(계열 다름+영어) — 셋 다 1024 native
 5. **골든셋 시드** — 질문 7개 + easylaw Q/A 7개 = 14건
 6. **3파전 비교**(Hit@5·MRR) · **검문소② 명백히 나쁜 것만 거름** (14건이라 통계적 판정은 불가)
 7. **승자 1종만 DB 적재** (`documents`, `embedding_model` 기록)
