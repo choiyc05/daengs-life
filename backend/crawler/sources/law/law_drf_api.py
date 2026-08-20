@@ -7,20 +7,31 @@ D-011 에서 웹 원문(`law-animal-protection` 등)을 정식 경로로 확정�
 역할이 다르다 — 웹은 **사람이 열 수 있는 출처 링크**(답변에 그대로 싣는다, KPI), API 는 **조문 경계가
 태그로 확정된 구조화 데이터**(청킹·`section` 채우기, D-004). 둘 다 두고 청킹 단계에서 API 쪽을 쓴다.
 
-검증 상태 (2026-08-20, LAW_OC 미발급):
-  확인됨 — 엔드포인트 응답, 인증 실패 응답의 형태(`_check_auth_error` 참고),
-           키 미설정 안내, URL 마스킹, 가짜 XML 로 돌린 `extract()`
-  ⚠️ 미확인 — **정상 응답을 한 번도 못 봤다.** 태그 이름은 법제처 공개 규격 기준이고,
-     파서는 후보를 여러 개 받아들이도록 느슨하게 짰지만 실물과 다를 수 있다.
-     키 발급 후 `--dry-run` 으로 먼저 확인할 것:
-       1. 검색 결과의 법령명 태그가 `법령명한글` 인지 (본문은 `법령명_한글` 로 밑줄이 있다)
-       2. 조문이 `조문단위` 로 반복되는지, 항·호가 `항내용`/`호내용` 인지
-       3. `.meta.json` 의 source_url 에 OC 가 *** 로 가려졌는지  ← 이건 반드시 눈으로 확인
-       4. 응답 바이트가 호출마다 같은지. xml 은 지문이 원본 바이트 해시라(D-009),
-          응답에 타임스탬프 같은 게 섞이면 매번 CHANGED 가 뜬다. 그러면 지문을 text 기준으로 바꾼다
+규격 검증 (2026-08-20) — 법제처 공식 매뉴얼이 공개한 샘플 키 `OC=test` 로 실제 응답을 받아 확인했다.
+  검색 `lawSearch.do` : <LawSearch><resultCode>00</resultCode><law><법령명한글>(CDATA)</법령명한글>
+                        <법령ID>000412</법령ID><법령일련번호>287795</법령일련번호>…
+  본문 `lawService.do` : <법령><기본정보>(법령명_한글·시행일자·공포일자·공포번호·제개정구분·소관부처)
+                        <조문단위 조문키="0015001"><조문번호>15</조문번호><조문여부>조문|전문</조문여부>
+                          <조문제목>…<조문내용>제15조(…)  <항><항번호>①</항번호><항내용>…
+                            <호><호내용>1. …</호내용></호>  <목><목내용>가. …</목내용></목>
+  - 검색은 `법령명한글`(밑줄 없음), 본문은 `법령명_한글`(밑줄 있음)로 **이름이 다르다**
+  - `조문여부`가 `전문`인 단위는 장·절 제목("제1장 총칙")이다. 조 수는 `조문`만 센다
+  - 항·호·목의 내용에는 번호가 이미 붙어 있다(`① …`, `1. …`) — 따로 조립할 필요 없다
+  - 검색의 `법령ID`(000412)로 본문을 부르면 현행 시행본이 온다.
+    `법령일련번호`(287795)는 D-011 에서 웹 껍데기로 얻은 `lsiSeq` 와 같은 값이다
+  - 웹 원문에 없던 **별표·서식이 `<별표단위>` 로 오고 HWP/PDF 파일 링크가 들어 있다**
+    (`<별표서식파일링크>` 를 https://www.law.go.kr 뒤에 붙이면 내려받아진다).
+    D-011 에서 미해결로 남긴 "과태료 부과기준 별표" 문제의 답이 여기 있다
 
-발급 시 주의 — DRF 는 OC 문자열만으로 되지 않는다. 신청할 때 **호출할 서버의 IP/도메인을 등록**해야
-하고, 등록하지 않으면 HTTP 200 에 인증 실패 XML 이 온다. 개발 PC 에서 돌리려면 그 PC 의 공인 IP 도 등록.
+⚠️ 아직 안 해본 것 — 이 소스로 **실제 수집(run)을 돌린 적은 없다.** `OC=test` 는 규격 확인용 공용
+   샘플 키라 파이프라인에 쓰지 않는다. 본인 OC 를 넣고 `--dry-run` 후 다음을 확인할 것:
+     1. `.meta.json` 의 source_url 에 OC 가 *** 로 가려졌는지  ← 반드시 눈으로
+     2. 응답 바이트가 호출마다 같은지. xml 은 지문이 원본 바이트 해시라(D-009),
+        응답에 타임스탬프 같은 게 섞이면 매번 CHANGED 가 뜬다. 그러면 지문을 text 기준으로 바꾼다
+
+OC 발급 — open.law.go.kr 에서 신청하면 즉시 나온다. IP/도메인 등록은 **필수가 아니다**
+(`OC=test` 가 등록 없이 이 PC 에서 동작하는 것으로 확인). 인증 실패 시 나오는 "IP주소 및 도메인주소를
+등록해 주세요" 는 원인을 특정하지 않는 공통 안내문이라, 잘못된 OC 를 써도 똑같이 나온다.
 """
 from __future__ import annotations
 
@@ -142,6 +153,10 @@ class LawDrfApi(Source):
         _check_auth_error(res.content)
         soup = BeautifulSoup(res.content, "xml")
 
+        # 성공 응답은 <resultCode>00</resultCode><resultMsg>success</resultMsg>
+        if (code := _text(soup, "resultCode")) and code != "00":
+            raise RuntimeError(f"lawSearch 실패 code={code} msg={_text(soup, 'resultMsg')}")
+
         wanted = _norm(name)
         for law in soup.find_all("law"):
             got = _text(law, "법령명한글", "법령명_한글", "법령명")
@@ -174,20 +189,29 @@ class LawDrfApi(Source):
             "ministry": _text(info, "소관부처명"),
         }
 
-        lines: list[str] = []
         units = soup.find_all("조문단위")
-        for unit in units:
-            for tag in ("조문내용", "항내용", "호내용", "목내용"):
-                for el in unit.find_all(tag):
-                    if t := el.get_text(strip=True):
-                        lines.append(t)
-
         if not units:
-            extra["warning"] = "조문단위 태그가 없음 — 규격 확인 필요"
-        extra["articles"] = len(units)
+            raise RuntimeError(f"조문단위 태그가 없음 — 규격 확인 필요: {_preview(res.content)}")
 
-        # 조문 번호는 D-004 의 section 후보다. 조문 텍스트가 이미 '제1조(목적)' 으로 시작하므로
-        # 여기서는 개수만 남기고, 실제 section 부여는 파싱 단계에서 한다.
+        # 태그 목록을 한 번에 넘겨 **문서 순서대로** 받는다.
+        # 태그별로 따로 돌면 조 안에서 항→호→목 이 각각 뭉쳐 나와 읽는 순서가 깨진다
+        # (제2조의 '가. 포유류 / 나. 조류' 가 호 나열 뒤로 밀렸다).
+        lines = [t for el in soup.find_all(["조문내용", "항내용", "호내용", "목내용"])
+                 if (t := el.get_text(strip=True))]
+
+        # 조문여부: '조문' = 실제 조, '전문' = 장·절 제목("제1장 총칙"). 조 수는 전자만 센다
+        # (동물보호법 = 조 103 + 장절 12 = 단위 115. 웹 원문의 div.lawcon 103개와 일치).
+        extra["articles"] = sum(1 for u in units
+                                if (f := u.find("조문여부")) is not None and f.get_text(strip=True) == "조문")
+        extra["units"] = len(units)
+
+        # 별표·서식은 본문에 없고 파일 링크로 온다 — D-011 에서 웹 원문의 미해결로 남겨둔 부분이다.
+        tables = soup.find_all("별표단위")
+        if tables:
+            extra["attachments"] = len(tables)
+
+        # 조문키/조문번호는 D-004 의 section 후보다. 원본 XML 을 그대로 저장하므로
+        # 여기서는 개수만 남기고 실제 section 부여는 파싱 단계에서 한다.
         text = textutil.squeeze("\n".join(lines))
         return Extracted(title=title, text=text, published_at=published,
                          cites=textutil.cites(text), extra=extra)

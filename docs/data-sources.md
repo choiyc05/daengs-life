@@ -194,9 +194,10 @@
 
 - [ ] **`LAW_OC`** — [open.law.go.kr](https://open.law.go.kr/LSO/openApi/guideResult.do) → OPEN API 신청 · 즉시 발급
       → 막고 있는 것: `law-drf-api`, `ordinance-search` (법령·조례 조문 API)
-      ⚠️ **OC 문자열만으로는 안 된다** — 신청할 때 호출할 **서버의 IP/도메인을 등록**해야 하고,
-      등록 없이 호출하면 HTTP 200 에 "사용자 정보 검증에 실패하였습니다" XML 이 온다.
-      개발 PC 에서 돌리려면 그 PC 의 공인 IP 도 등록할 것 (2026-08-20 실제 응답으로 확인)
+      **IP/도메인 등록은 필요 없다.** 공식 매뉴얼의 샘플 키 `OC=test` 가 등록 없이 그냥 동작하는 것으로
+      확인(2026-08-20). 인증 실패 시 나오는 "IP주소 및 도메인주소를 등록해 주세요" 는 원인을 특정하지
+      않는 공통 안내문이라, OC 값이 틀렸을 때도 똑같이 나온다
+      → `.env` 에 `LAW_OC=발급받은ID` 한 줄. crawler 가 `.env` 를 직접 읽는다
 - [ ] **`DATA_GO_KR_KEY`** — data.go.kr 회원가입 → 각 API "활용신청" · 자동승인, 즉시
       → 막고 있는 것: `data-registration-lookup`, `benefit24-services` + 실시간 5건
 - [ ] **`KAKAO_REST_KEY`** — developers.kakao.com · 즉시
