@@ -19,7 +19,7 @@ services:
       # 최초 1회(볼륨이 비어 있을 때)만 실행됨
       - ./db/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-ragdb}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-lifedb}"]
       interval: 10s
       timeout: 5s
       retries: 5
