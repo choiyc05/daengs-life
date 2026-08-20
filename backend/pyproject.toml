@@ -36,3 +36,9 @@ explicit = true
 
 [tool.uv.sources]
 torch = [{ index = "pytorch-cu126", marker = "sys_platform == 'win32'" }]
+
+[tool.pytest.ini_options]
+# backend/ 를 sys.path 에 올려 tests/ 에서 crawler 를 import 할 수 있게 한다
+# (tests/ 는 패키지가 아니라 pytest 가 backend/ 를 자동으로 넣어주지 않는다)
+pythonpath = ["."]
+testpaths = ["tests"]

@@ -1,4 +1,13 @@
-"""경로·공통 상수. 환경변수로만 덮어쓴다 (pydantic-settings는 app 쪽 관심사라 여기선 안 씀)."""
+"""설정·경로·공통 상수.
+
+값은 `pydantic-settings` 로 읽는다 (D-015). 우선순위는 **실제 환경변수 > backend/.env > 루트 .env**.
+두 env 파일은 병합된다 — 루트에만 있는 값도 그대로 올라오고, 양쪽에 있으면 backend 쪽이 이긴다.
+배포에서는 오케스트레이터가 넣은 환경변수가 항상 이기므로 파일이 하나도 없어도 동작한다.
+
+`crawler` 는 자기 Settings 를 가진다. app 이 생기면 app 이 같은 `backend/.env` 를 자기 Settings 로
+읽는다 — 공유 Settings 를 만들면 크롤러가 `DATABASE_URL`·`GEMINI_API_KEY` 까지 알게 되어
+`app → crawler` 한 방향(D-009)이 흐려진다.
+"""
 from __future__ import annotations
 
 import os
@@ -6,13 +15,9 @@ import re
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
 KST = ZoneInfo("Asia/Seoul")
-
-USER_AGENT = "daengs-life-crawler/0.1 (+mailto:choiyc05@gmail.com)"
-REQUEST_DELAY_SEC = 1.5        # 같은 호스트 연속 요청 간격 (docs/data-sources.md §4)
-REQUEST_TIMEOUT_SEC = 30
-MAX_RETRIES = 3
-
 
 # backend/ — 이 패키지가 속한 uv 프로젝트의 루트. crawler/core/config.py 에서 세 단계 위다.
 # 레포를 통째로 두든 backend/ 만 이미지에 넣든 **항상 존재하는** 유일한 기준점이라
@@ -33,39 +38,52 @@ def _find_repo_root(start: Path) -> Path | None:
     return None
 
 
+# DAENGS_REPO_ROOT 만 Settings 가 아니라 os.environ 에서 직접 읽는다 — 어느 .env 를 읽을지
+# 정하려면 이 값이 먼저 필요해 Settings 안에 둘 수 없다(닭-달걀). 컨테이너 레벨 노브라 성격도 맞는다.
 _repo_root_env = os.environ.get("DAENGS_REPO_ROOT")
 REPO_ROOT: Path | None = Path(_repo_root_env) if _repo_root_env else _find_repo_root(PACKAGE_ROOT)
 
-
-def _load_dotenv(path: Path) -> None:
-    """KEY=VALUE 를 환경변수로 올린다. **이미 있는 값은 덮지 않는다.**
-
-    python-dotenv 를 넣지 않은 이유 — 필요한 건 이 10줄뿐이고, crawler 는 의존성을 얇게 유지한다
-    (D-009). docs 가 "키는 .env 에" 라고 안내하므로 CLI 를 그냥 실행해도 읽혀야 한다.
-    """
-    if not path.is_file():
-        return
-    for line in path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, _, value = line.partition("=")
-        os.environ.setdefault(key.strip(), value.strip().strip("\"'"))
+# 뒤에 오는 파일이 우선. 존재하지 않는 경로는 pydantic-settings 가 알아서 건너뛴다.
+_ENV_FILES = tuple(p for p in ((REPO_ROOT / ".env") if REPO_ROOT else None,
+                               PACKAGE_ROOT / ".env") if p is not None)
 
 
-# 우선순위: 실제 환경변수 > backend/.env > 레포 루트 .env  (setdefault 라 먼저 읽은 쪽이 이긴다)
-#   backend/.env  — 이 배포 단위가 쓰는 값 (API 키). D-014
-#   루트 .env      — compose 가 읽는 인프라 값. 백엔드에도 필요한 값이 여기 있으면 받아 쓴다
-# 배포에서는 오케스트레이터가 넣은 환경변수가 항상 이기므로 두 파일 다 없어도 그대로 동작한다.
-_load_dotenv(PACKAGE_ROOT / ".env")
-if REPO_ROOT is not None:
-    _load_dotenv(REPO_ROOT / ".env")
+class Settings(BaseSettings):
+    """crawler 가 쓰는 값 전부. 이름은 docs/data-sources.md §9 발급 체크리스트와 같다."""
 
-_data_dir_env = os.environ.get("DAENGS_DATA_DIR")
-DATA_DIR: Path | None = (
-    Path(_data_dir_env) if _data_dir_env
-    else (REPO_ROOT / "data" if REPO_ROOT is not None else None)
-)
+    # --- 크롤 예절 (docs/data-sources.md §12) ---
+    user_agent: str = "daengs-life-crawler/0.1 (+mailto:choiyc05@gmail.com)"
+    request_delay_sec: float = 1.5          # 같은 호스트 연속 요청 간격
+    request_timeout_sec: float = 30
+    max_retries: int = 3
+
+    # --- API 키 ---
+    # 미발급이면 빈 문자열이고, 그 소스는 discover() 에서 발급처를 안내하며 멈춘다.
+    law_oc: str = ""
+    data_go_kr_key: str = ""
+    kakao_rest_key: str = ""
+    seoul_open_data_key: str = ""
+    kma_hub_key: str = ""
+
+    # --- 경로 override ---
+    # 레포 안에서 실행하면 비워 둔다. 컨테이너처럼 레포 밖에서 돌릴 때만 지정.
+    daengs_data_dir: Path | None = None
+
+    model_config = SettingsConfigDict(
+        env_file=_ENV_FILES,
+        env_file_encoding="utf-8",
+        extra="ignore",                     # 같은 .env 안의 POSTGRES_* 등은 무시
+    )
+
+
+settings = Settings()
+
+USER_AGENT = settings.user_agent
+REQUEST_DELAY_SEC = settings.request_delay_sec
+REQUEST_TIMEOUT_SEC = settings.request_timeout_sec
+MAX_RETRIES = settings.max_retries
+
+DATA_DIR: Path | None = settings.daengs_data_dir or (REPO_ROOT / "data" if REPO_ROOT else None)
 RAW_DIR = DATA_DIR / "raw" if DATA_DIR else None
 MANIFEST_DIR = DATA_DIR / "manifests" if DATA_DIR else None
 SEED_FILE = MANIFEST_DIR / "seed_sources.yaml" if MANIFEST_DIR else None
@@ -83,10 +101,10 @@ def require_data_dir() -> Path:
         )
     return DATA_DIR
 
-# 발급받은 API 키. 미발급이면 빈 문자열이고, 그 소스는 discover() 에서 안내 메시지와 함께 멈춘다.
-# 이름은 docs/data-sources.md §9 발급 체크리스트와 같다.
-_SECRET_ENV = ["LAW_OC", "DATA_GO_KR_KEY", "KAKAO_REST_KEY", "SEOUL_OPEN_DATA_KEY", "KMA_HUB_KEY"]
-SECRETS = {name: os.environ.get(name, "").strip() for name in _SECRET_ENV}
+
+# 마스킹 대상 — Settings 의 키 필드에서 만든다. 필드를 추가하면 여기에도 이름을 넣을 것.
+_SECRET_FIELDS = ["law_oc", "data_go_kr_key", "kakao_rest_key", "seoul_open_data_key", "kma_hub_key"]
+SECRETS = {name.upper(): (getattr(settings, name) or "").strip() for name in _SECRET_FIELDS}
 
 LAW_OC = SECRETS["LAW_OC"]
 

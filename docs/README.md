@@ -2,7 +2,7 @@
 
 | 문서 | 내용 |
 |---|---|
-| [decisions.md](decisions.md) | 설계 결정 기록 (ADR) — D-001 오케스트레이션(Celery+Beat)·D-008 저장 규약/스키마·D-009 크롤러 배치/소스 계약·D-010 원본 부재 시 재수집·D-011 법령 웹 원문 수집 경로·D-012 소스 도메인 분류/API 키 규칙·D-013 MCP 미채택·D-014 env 배치/의존방향 가드 확정, D-002~007 논의중 |
+| [decisions.md](decisions.md) | 설계 결정 기록 (ADR) — D-001 오케스트레이션(Celery+Beat)·D-008 저장 규약/스키마·D-009 크롤러 배치/소스 계약·D-010 원본 부재 시 재수집·D-011 법령 웹 원문 수집 경로·D-012 소스 도메인 분류/API 키 규칙·D-013 MCP 미채택·D-014 env 배치/의존방향 가드·D-015 pydantic-settings 확정, D-002~007 논의중 |
 | [data-sources.md](data-sources.md) | 제도·문서형 RAG 데이터 소스 **수집 체크리스트** — 파트별 소스 30개 진행 현황, 키 발급·요확인 체크, Phase 전략 |
 | [realtime-apis.md](realtime-apis.md) | 실시간 조회(날씨·대기질) API 정리 + GPS 정밀도 결론 + 산책지수 입력 매핑 (2026-08-19) |
 

@@ -47,7 +47,11 @@ registry 는 모듈 안에서 `__module__` 이 그 모듈인 `Source` 하위 클
 
 `backend/.env` 에 넣는다 (`backend/.env.example` 참고). 이름은 `docs/data-sources.md` §9 와 같다.
 
+`core/config.py` 의 `Settings(BaseSettings)` 가 **pydantic-settings** 로 읽는다 (D-015).
+값을 추가하려면 필드를 선언하면 되고, 키라면 `_SECRET_FIELDS` 에도 이름을 넣어 마스킹 대상으로 만든다.
+
 읽는 순서는 **실제 환경변수 > `backend/.env` > 레포 루트 `.env`** (D-014).
+두 파일은 병합된다 — 루트에만 있는 값도 올라오고, 겹치면 backend 쪽이 이긴다.
 배포에서는 오케스트레이터가 넣은 환경변수가 항상 이기므로 파일이 없어도 그대로 돈다.
 
 **키가 URL 에 들어가는 소스는 저장·로그·출력 전에 `config.redact()` 를 통과한다** — `.meta.json` 은
@@ -64,9 +68,11 @@ uv sync --group dev
 uv run pytest
 ```
 
-`tests/test_import_direction.py` 가 `crawler` 안의 import 문을 AST 로 훑어 `app`·`tasks`·`main` 을
-끌어다 쓰지 않는지 검사한다 (D-009 의존 방향, D-014). 검사기가 살아 있는지 확인하는 테스트가
-한 개 더 있다 — 검사기가 조용히 아무것도 안 보게 되면 그쪽이 먼저 실패한다.
+- `test_import_direction.py` — `crawler` 안의 import 문을 AST 로 훑어 `app`·`tasks`·`main` 을
+  끌어다 쓰지 않는지 검사한다 (D-009 의존 방향, D-014). 검사기가 살아 있는지 확인하는 테스트가
+  한 개 더 있다 — 검사기가 조용히 아무것도 안 보게 되면 그쪽이 먼저 실패한다.
+- `test_config_env.py` — 설정 우선순위, `.env` 파싱(주석·export·따옴표), 키 마스킹,
+  레포 밖 실행 (D-014, D-015).
 
 ## 실행
 

@@ -380,3 +380,34 @@ D-011 의 웹 원문을 대체하지 않는다. 웹은 사람이 열 수 있는 
 지금 합쳐 두는 것이 맞지만, 다음 중 하나가 오면 이미지를 분리한다 — **크롤러에만 무겁거나 설치가 까다로운 의존성**(HWP 파서·OCR)이 필요해질 때, 또는 **크롤러만 스케일·스케줄이 달라질 때**. 그때도 레포는 하나로 두고 `uv sync --group crawl` 로 이미지만 나눈다. D-009 가 잡아 둔 의존성 그룹 분리 기준과 같다.
 
 **compose 에 backend 서비스를 추가하는 것은 이번 범위 밖이다** (지금은 db 만 있다).
+
+---
+
+## D-015. crawler 설정은 pydantic-settings 로 읽는다 — ✅ 확정 (2026-08-20)
+
+**배경** — D-014 에서 `.env` 로더를 10줄짜리 손 파서로 넣었다. 근거를 세 개 댔는데 전부 틀렸다.
+
+| 당시 근거 | 실제 |
+|---|---|
+| "python-dotenv 를 새로 넣지 않으려고" | `python-dotenv` 는 `pydantic-settings` 의 **필수** 의존성이라 이미 설치돼 있었다 |
+| "pydantic-settings 는 app 쪽 관심사" (config.py 원 주석) | 라이브러리일 뿐이다. crawler 가 app 을 import 하는 게 아니라 D-009 와 무관하다 |
+| "필요한 건 10줄뿐" | 그 10줄이 조용히 틀린다 (아래) |
+
+**손 파서가 깨지던 지점** — 값이 틀려도 예외가 안 나서 **키가 잘못된 채로 API 를 호출**하게 된다.
+
+| `.env` 원문 | pydantic-settings | 손 파서 |
+|---|---|---|
+| `LAW_OC=abc123 # 8/20 발급` | `'abc123'` | `'abc123 # 8/20 발급'` ❌ |
+| `export LAW_OC=v` | `'v'` | 키가 `'export LAW_OC'` 이 되어 영영 못 찾음 ❌ |
+
+**결정** — `crawler/core/config.py` 에 `Settings(BaseSettings)` 를 두고 값을 전부 필드로 선언한다. 크롤 예절 상수(UA·요청 간격·타임아웃·재시도)도 필드로 올려 환경변수로 조절할 수 있게 했다.
+
+**우선순위는 그대로** 실제 환경변수 > `backend/.env` > 루트 `.env`. `env_file` 에 튜플로 넘기면 **뒤쪽이 우선이고 둘이 병합된다** — 루트에만 있는 값도 그대로 올라온다(실측 확인). 없는 파일은 알아서 건너뛴다.
+
+**`DAENGS_REPO_ROOT` 만 `os.environ` 에서 직접 읽는다.** 어느 `.env` 를 읽을지 정하려면 이 값이 먼저 필요해 Settings 안에 둘 수 없다(닭-달걀). 컨테이너 레벨 노브라 성격도 맞는다. `DAENGS_DATA_DIR` 은 env 파일 선택에 영향을 주지 않으므로 Settings 필드다.
+
+**모듈 상수는 유지한다** — `config.RAW_DIR`·`SEED_FILE`·`USER_AGENT` 등을 `settings` 에서 파생시켰다. 호출부(store·registry·fetch)를 건드리지 않아 이번 변경의 위험 범위가 config.py 한 파일로 묶인다. `redact()`·`require_data_dir()` 도 그대로다.
+
+**crawler 는 자기 Settings 를 가진다.** app 이 생기면 app 이 같은 `backend/.env` 를 자기 Settings 로 읽는다. 공유 Settings 를 만들면 크롤러가 `DATABASE_URL`·`GEMINI_API_KEY` 까지 알게 되어 `app → crawler` 한 방향(D-009)이 흐려진다. env **파일**은 배포 단위 단위로 공유하고(D-014), **Settings 클래스**는 패키지별로 나눈다.
+
+**테스트** — `tests/test_config_env.py` 7개. 우선순위 두 종류, 주석·export·따옴표 파싱, 없는 파일, 마스킹(파라미터명/값/무관 URL), `require_data_dir()` 안내, 레포 밖 `_find_repo_root() is None`. pytest 가 `crawler` 를 import 할 수 있도록 `[tool.pytest.ini_options] pythonpath = ["."]` 을 pyproject 에 넣었다.
