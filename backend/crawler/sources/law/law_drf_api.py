@@ -129,21 +129,28 @@ class LawDrfApi(Source):
 
         targets: list[Target] = []
         for name, suffix, subcategory in self.LAWS:
-            law_id = self._find_law_id(fetcher, name)
+            found = self._find_law(fetcher, name)
             targets.append(Target(
-                url=f"{SERVICE}?OC={config.LAW_OC}&target=law&type=XML&ID={law_id}",
+                url=f"{SERVICE}?OC={config.LAW_OC}&target=law&type=XML&ID={found['law_id']}",
                 slug=f"{self.id}-{suffix}",
                 ext="xml",
-                meta={"title": name, "law_id": law_id, "subcategory": subcategory},
+                meta={"title": name, "subcategory": subcategory, **found},
             ))
         return targets
 
-    def _find_law_id(self, fetcher: Fetcher, name: str) -> str:
-        """법령명으로 검색해 법령ID 를 얻는다.
+    def _find_law(self, fetcher: Fetcher, name: str) -> dict[str, str | None]:
+        """법령명으로 검색해 법령ID·법령일련번호·**현행 시행일자**를 얻는다.
 
         검색은 부분 일치라 '동물보호법' 하나로 시행령·시행규칙·무관한 법이 함께 나온다.
         공백을 지운 이름이 정확히 같은 것만 고른다 — 정식 명칭의 띄어쓰기가 흔들리기 때문
         ('가축전염병 예방법').
+
+        시행일자를 여기서 가져오는 이유 (2026-08-20 실측) — 본문조회 `기본정보/시행일자` 는
+        **현행 시행일이 아니다.** 동물보호법 시행령은 한 번 공포(2025-06-02)에 단계별 시행일이
+        걸려 있어 `target=eflaw` 이력에 같은 일련번호가 20250602 / 20251203 / 20260603 세 번
+        나온다. 본문조회는 그중 기준 레코드 날짜(20250602)를 주는데, 오늘 시행 중인 것은
+        20260603 이고 그 값은 목록조회의 `현행` 레코드와 웹 원문 화면에만 있다.
+        본문 자체는 같은 버전이다 — 조문 집합이 웹 원문과 정확히 일치하는 것으로 확인했다.
         """
         url = f"{SEARCH}?OC={config.LAW_OC}&target=law&type=XML&display=100&query={quote(name)}"
         res = fetcher.get(url)
@@ -163,7 +170,12 @@ class LawDrfApi(Source):
             if got and _norm(got) == wanted:
                 law_id = _text(law, "법령ID", "법령일련번호")
                 if law_id:
-                    return law_id
+                    return {
+                        "law_id": law_id,
+                        # 웹 원문(D-011)의 lsiSeq 와 같은 값이라 두 소스를 맞춰 볼 수 있다
+                        "law_serial": _text(law, "법령일련번호"),
+                        "published_at": _ymd(_text(law, "시행일자")),
+                    }
         raise RuntimeError(
             f"'{name}' 을 검색 결과에서 찾지 못함. 정식 명칭이 바뀌었거나 응답 규격이 다를 수 있다.\n"
             f"  응답 앞부분: {_preview(res.content)}"
@@ -179,15 +191,23 @@ class LawDrfApi(Source):
                 f"기본정보 태그 없음 — 규격이 다르다: {_preview(res.content)}")
 
         title = _text(info, "법령명_한글", "법령명한글", "법령명") or target.meta.get("title", "")
-        published = _ymd(_text(info, "시행일자"))
+
+        # 시행일자는 목록조회에서 받아 온 값을 쓴다 — 본문조회의 것은 현행 시행일이 아니다
+        # (_find_law 의 주석 참고). 목록에서 못 얻었을 때만 본문 값으로 떨어진다.
+        record_date = _ymd(_text(info, "시행일자"))
+        published = target.meta.get("published_at") or record_date
 
         extra: dict[str, object] = {
             "law_id": target.meta.get("law_id"),
+            "law_serial": target.meta.get("law_serial"),
             "promulgated_at": _ymd(_text(info, "공포일자")),
             "promulgation_no": _text(info, "공포번호"),
             "revision_kind": _text(info, "제개정구분"),
             "ministry": _text(info, "소관부처명"),
         }
+        if record_date and record_date != published:
+            # 단계별 시행일이 걸린 법령. 어느 쪽을 썼는지 남겨 두면 나중에 헷갈리지 않는다
+            extra["record_date"] = record_date
 
         units = soup.find_all("조문단위")
         if not units:
@@ -205,10 +225,17 @@ class LawDrfApi(Source):
                                 if (f := u.find("조문여부")) is not None and f.get_text(strip=True) == "조문")
         extra["units"] = len(units)
 
-        # 별표·서식은 본문에 없고 파일 링크로 온다 — D-011 에서 웹 원문의 미해결로 남겨둔 부분이다.
+        # 부칙 — 시행일과 경과규정이 들어 있다. 웹 원문(D-011)도 본문에 포함하므로 맞춘다.
+        addenda = soup.find_all("부칙단위")
+        extra["addenda"] = len(addenda)
+        lines += [t for el in addenda if (t := el.get_text("\n", strip=True))]
+
+        # 별표·서식 — **내용이 통째로 들어 있다** (`별표내용`). D-011 에서 웹 원문의 미해결로
+        # 남겨 둔 "과태료 부과기준 별표" 문제의 답이 여기다. 웹 HTML 에는 제목과 파일 링크뿐이었다.
+        # 시행규칙은 별표가 80개고 서식 양식이 대부분이라 본문 대비 비중이 크다.
         tables = soup.find_all("별표단위")
-        if tables:
-            extra["attachments"] = len(tables)
+        extra["attachments"] = len(tables)
+        lines += [t for el in tables if (t := el.get_text("\n", strip=True))]
 
         # 조문키/조문번호는 D-004 의 section 후보다. 원본 XML 을 그대로 저장하므로
         # 여기서는 개수만 남기고 실제 section 부여는 파싱 단계에서 한다.

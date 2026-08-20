@@ -18,10 +18,19 @@
 - frontend: Next.js (단순 확인용)
 - 로컬: `docker compose up -d` (컨테이너 `daengs_life_db`, DB명 `lifedb`, init은 `db/init/`)
 
-## 현재 상태 (2026-08-19 기준)
-- 완료: 데이터 소스 조사(`docs/data-sources.md`, 시드 30개 `data/manifests/seed_sources.yaml`), 실시간 API 조사+GPS 결론(`docs/realtime-apis.md`), D-001 오케스트레이션 확정, D-008 저장 규약·스키마 정정 확정, DB 기동·스키마 검증, **크롤러 뼈대(`backend/crawler/`) + 첫 소스 `easylaw-pet` 14건 수집 (본문 7 + 100문100답 7, 조항 인용 추출)**
+## 현재 상태 (2026-08-20 기준)
+- 완료: 데이터 소스 조사(`docs/data-sources.md` — 파트별 체크리스트), 실시간 API 조사+GPS 결론(`docs/realtime-apis.md`), DB 기동·스키마 검증
+- **수집 28건 — §1 공통·법령 파트 전체 완료**
+  - `easylaw-pet` 14 (해설 + 100문100답 → D-007 골든셋 재료)
+  - `law-animal-protection` 3 · `law-livestock-epidemic` 3 (웹 원문 = 사람이 여는 출처 링크)
+  - `law-drf-api` 8 (조문 단위 XML + **별표 본문** — 청킹용). `law_serial` ↔ 웹의 `lsiSeq` 로 짝지음
+- 확정: D-001 오케스트레이션 / D-008 저장 규약·스키마 / D-009 크롤러 배치·소스 계약 / D-010 원본 부재 재수집 /
+  D-011 법령 웹 원문 경로 / D-012 소스 도메인 분류·API 키 규칙 / D-013 MCP 미채택 / D-014 env 배치·의존방향 가드 /
+  D-015 pydantic-settings / D-016 법령 API 수집 완료
 - 논의중(🔶): D-002 임베딩(gemini@1024 기본값→골든셋 3파전 베이크오프), D-003 하이브리드·리랭커, D-004 청킹(조문 단위), D-005 실행순서, D-006 EDA 시스템화, D-007 평가 체계(Hit@5·MRR·LLM judge)
-- 다음 후보: Phase 1 나머지 소스(animal.go.kr → 정부24 → nias → 법령 웹 원문) 를 `crawler/sources/` 에 추가 — 절차는 `backend/crawler/README.md`. 그 다음 파싱/청킹(D-004) 으로 첫 RAG 관통
-- 필요 키(**`backend/.env`**, 미발급): DATA_GO_KR_KEY, LAW_OC, KAKAO_REST_KEY — 발급처는 docs/data-sources.md §9
+- 다음: **D-004 청킹 논의** (법령 조문 구조가 실물로 확보돼 경계를 보고 정할 수 있음).
+  또는 Phase 1 나머지 소스 6개(animal.go.kr → 정부24 → nias → 맹견 해설 2 → 서울 지원) — 절차는 `backend/crawler/README.md`
+- 테스트: `cd backend && uv run pytest` (의존 방향 가드 + 설정 로딩)
+- 필요 키(**`backend/.env`**): LAW_OC ✅발급완료 / DATA_GO_KR_KEY·KAKAO_REST_KEY 미발급 — 발급처는 docs/data-sources.md §9
   - env 배치는 배포 단위 기준(D-014): 루트 `.env`=인프라(compose), `backend/.env`=백엔드 런타임, `frontend/.env`=프론트
   - 읽는 순서 실제 환경변수 > `backend/.env` > 루트 `.env`. 컨테이너에선 `DAENGS_DATA_DIR` 로 data/ 위치 지정
