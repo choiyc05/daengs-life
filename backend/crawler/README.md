@@ -22,8 +22,8 @@ crawler/
 cd backend
 uv run python -m crawler list                                   # 소스 목록 + 구현 여부
 uv run python -m crawler run --source easylaw-pet --dry-run --limit 3   # 아무것도 안 쓰고 추출 결과만
-uv run python -m crawler run --source easylaw-pet               # 수집
-uv run python -m crawler run --source easylaw-pet --force       # sha256 같아도 새 파일로
+uv run python -m crawler run --source easylaw-pet               # 수집 (원본 없는 것은 자동 재수집)
+uv run python -m crawler run --source easylaw-pet --force       # sha256 같고 원본 있어도 새 파일로
 ```
 
 ## 소스 하나 추가하는 절차
@@ -47,5 +47,9 @@ uv run python -m crawler run --source easylaw-pet --force       # sha256 같아�
 - `sha256` 은 html 이면 `extract().text` 해시, 그 외는 원본 바이트 해시. `store.py` 주석 참고.
 - 같은 slug 의 최신 `.meta.json` 과 지문이 같으면 아무것도 안 쓰고 로그만 `changed:false`.
   다르면 오늘 날짜로 새 파일 (옛 파일 보존 — 원본 불변).
+- **지문이 같아도 meta 의 `raw_file` 이 디스크에 없으면 다시 받는다** (D-010, 출력 라벨 `RAW-MISSING`).
+  원본은 git 미추적이라 다른 PC 에서 clone 하면 meta 만 있고 원본이 없다 — 그대로 두면 전부 `same` 으로
+  스킵돼 파싱 단계가 빈손이 된다. `--force` 없이 그냥 `run` 하면 없는 것만 채워진다.
+- 왜 받았는지는 `crawl_log.jsonl` 의 `reason`: `new`/`changed`/`raw-missing`/`forced`/`same`.
 - `Fetcher` 는 4xx 는 즉시 반환(재시도 무의미), 5xx·네트워크 오류만 지수 백오프 3회.
 - 시간대는 `Asia/Seoul` 고정. Windows 에는 tz DB 가 없어 `tzdata` 패키지가 의존성에 들어 있다.

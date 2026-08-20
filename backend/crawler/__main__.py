@@ -15,6 +15,15 @@ from .core.fetch import Fetcher
 from .core.store import Store
 
 
+STATE_LABEL = {
+    "new": "NEW",
+    "changed": "CHANGED",
+    "raw-missing": "RAW-MISSING",     # meta 만 있고 원본이 없어 다시 받음 (다른 PC 에서 clone 한 경우)
+    "forced": "FORCED",
+    "same": "same",
+}
+
+
 def cmd_list(_: argparse.Namespace) -> int:
     seeds = registry.load_seeds()
     for sid, s in seeds.items():
@@ -26,7 +35,7 @@ def cmd_list(_: argparse.Namespace) -> int:
 def cmd_run(args: argparse.Namespace) -> int:
     src = registry.build(args.source)
     store = Store(dry_run=args.dry_run, force=args.force)
-    n_fetched = n_changed = n_failed = n_skipped = 0
+    n_fetched = n_changed = n_failed = n_skipped = n_restored = 0
 
     with Fetcher() as fetcher:
         targets = src.discover(fetcher)
@@ -66,9 +75,10 @@ def cmd_run(args: argparse.Namespace) -> int:
             store.log(src, t, status=res.status, result=result)
             n_fetched += 1
             n_changed += int(result.changed)
+            n_restored += int(result.reason == "raw-missing")
 
-            state = "NEW" if result.previous_sha256 is None else ("CHANGED" if result.changed else "same")
-            print(f"{tag}  {state:7s} {res.status} {len(res.content):>7,}B  {res.elapsed_sec:.1f}s")
+            state = STATE_LABEL[result.reason]
+            print(f"{tag}  {state:11s} {res.status} {len(res.content):>7,}B  {res.elapsed_sec:.1f}s")
             if args.dry_run or args.verbose:
                 print(f"        title   : {ext.title}")
                 print(f"        chars   : {len(ext.text):,}   published_at: {ext.published_at}")
@@ -80,6 +90,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                 print(f"        -> raw/{result.raw_file}")
 
     print(f"\n[{src.id}] fetched {n_fetched}, changed {n_changed}, failed {n_failed}, skipped {n_skipped}"
+          + (f", restored {n_restored} (meta only, raw was missing)" if n_restored else "")
           + ("   (dry-run: nothing written)" if args.dry_run else f"   run_id={store.run_id}"))
     return 1 if n_failed else 0
 

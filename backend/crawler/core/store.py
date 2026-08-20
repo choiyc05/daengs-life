@@ -5,6 +5,11 @@
   같으면 아무것도 쓰지 않고 로그에 changed:false 만 남긴다.
   다르면 오늘 날짜로 새 원본 + 새 meta 를 쓴다 (옛 파일은 지우지 않음 — 원본 불변).
 
+  단, sha256 이 같아도 **meta 가 가리키는 원본이 디스크에 없으면 다시 받는다**.
+  원본은 git 미추적(D-008)이라 meta 만 clone 된 PC 에서는 전부 same 으로 스킵되어
+  파싱 단계가 빈손이 된다. meta 는 '이 문서를 받은 적이 있다'는 기록일 뿐이고,
+  파이프라인이 실제로 필요로 하는 것은 원본 파일이다.
+
 sha256 은 '콘텐츠 지문'이다:
   html 은 extract() 가 뽑은 본문 텍스트의 해시 — 조회수·세션값 같은 노이즈로
   매번 changed 가 뜨는 것을 막기 위해 원본 바이트가 아니라 본문을 본다.
@@ -42,6 +47,18 @@ class StoreResult:
     sha256: str
     changed: bool
     previous_sha256: str | None
+    raw_missing: bool = False     # meta 는 있는데 그 meta 가 가리키는 원본이 디스크에 없었다
+
+    @property
+    def reason(self) -> str:
+        """왜 받았는지(혹은 왜 안 받았는지). CLI 출력과 crawl_log 에 같은 값을 쓴다."""
+        if self.previous_sha256 is None:
+            return "new"
+        if self.previous_sha256 != self.sha256:
+            return "changed"
+        if self.raw_missing:
+            return "raw-missing"
+        return "forced" if self.changed else "same"
 
 
 class Store:
@@ -59,6 +76,12 @@ class Store:
             return None
         return json.loads(cands[-1].read_text(encoding="utf-8"))
 
+    @staticmethod
+    def _raw_exists(meta: dict[str, Any]) -> bool:
+        """meta 가 가리키는 원본이 실제로 디스크에 있는지. raw_file 이 비어 있으면 없는 것으로 본다."""
+        rel = meta.get("raw_file")
+        return bool(rel) and (config.RAW_DIR / rel).is_file()
+
     # ------------------------------------------------------------ save
     def save(self, src: Source, target: Target, res: FetchResult, ext: Extracted | None) -> StoreResult:
         domain_dir = config.RAW_DIR / src.domain
@@ -66,10 +89,12 @@ class Store:
 
         prev = self._latest_meta(domain_dir, target.slug)
         prev_sha = prev.get("sha256") if prev else None
-        changed = self.force or prev_sha != fingerprint
+        raw_missing = prev is not None and not self._raw_exists(prev)
+        changed = self.force or raw_missing or prev_sha != fingerprint
 
         if not changed or self.dry_run:
-            return StoreResult(raw_file=None, sha256=fingerprint, changed=changed, previous_sha256=prev_sha)
+            return StoreResult(raw_file=None, sha256=fingerprint, changed=changed,
+                               previous_sha256=prev_sha, raw_missing=raw_missing)
 
         today = now_kst().strftime("%Y%m%d")
         stem = f"{target.slug}__{today}"
@@ -105,7 +130,8 @@ class Store:
             "previous_sha256": prev_sha,
         }
         meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
-        return StoreResult(raw_file=raw_rel, sha256=fingerprint, changed=True, previous_sha256=prev_sha)
+        return StoreResult(raw_file=raw_rel, sha256=fingerprint, changed=True,
+                           previous_sha256=prev_sha, raw_missing=raw_missing)
 
     # ------------------------------------------------------------ log
     def log(self, src: Source, target: Target, *, status: int | None, result: StoreResult | None,
@@ -122,6 +148,7 @@ class Store:
             "status": status,
             "sha256": result.sha256 if result else None,
             "changed": result.changed if result else None,
+            "reason": result.reason if result else None,
             "fetched_at": now_kst().isoformat(timespec="seconds"),
             "error": error,
         }
