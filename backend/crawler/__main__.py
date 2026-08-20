@@ -27,7 +27,7 @@ STATE_LABEL = {
 def cmd_list(_: argparse.Namespace) -> int:
     seeds = registry.load_seeds()
     for sid, s in seeds.items():
-        impl = "✓" if registry.resolve(sid) else " "
+        impl = "x" if registry.resolve(sid) else " "     # ASCII 고정 — 윈도우 cp949 콘솔이 못 찍는다
         print(f"[{impl}] {sid:28s} {s['domain']:13s} {s['method']:9s} auth={s['auth']:11s} {s['status']}")
     return 0
 

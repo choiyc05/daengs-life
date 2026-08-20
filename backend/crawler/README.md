@@ -6,15 +6,26 @@
 crawler/
 ├── __init__.py        패키지 설명 (최상위만 둔다. core/·sources/ 는 빈 __init__ 없이 namespace 서브패키지)
 ├── __main__.py        CLI: list / run  — `python -m crawler` 의 진입점
-├── core/
+├── core/                                  ← 모든 소스가 공유. 고치면 전부에 적용된다
 │   ├── config.py      경로(REPO_ROOT/DATA_DIR), UA, 요청 간격
 │   ├── fetch.py       Fetcher — UA·호스트별 1.5s 간격·재시도·robots.txt
 │   ├── store.py       raw/ 저장 + .meta.json + crawl_log.jsonl, sha256 변경 감지
+│   ├── textutil.py    블록 단위 본문 추출 + 「법령」 조항 인용 파싱 (한국 법령 문서 공통)
 │   └── registry.py    seed_sources.yaml 로드, id → sources/ 모듈 매핑
-└── sources/
+└── sources/                               ← 사이트 고유 지식만
     ├── base.py        Source / Target / Extracted 계약
-    └── easylaw_pet.py 소스 모듈 (yaml id 'easylaw-pet' → 모듈명 easylaw_pet)
+    ├── _lawgokr.py    law.go.kr 웹 원문 공통 베이스 (앞에 _ → 소스가 아니라 베이스)
+    ├── easylaw_pet.py         생활법령 해설 (yaml id 'easylaw-pet' → 모듈명 easylaw_pet)
+    ├── law_animal_protection.py    동물보호법 3종      ┐ _lawgokr 상속.
+    └── law_livestock_epidemic.py   가축전염병예방법 3종 ┘ 법령 목록만 선언한다
 ```
+
+레이어는 셋이다. **`core/`** = 사이트와 무관한 것(받기·저장·변경감지·텍스트 정리), **`sources/_*.py`** =
+사이트 하나에 대한 공통 지식, **`sources/{id}.py`** = 그 사이트에서 무엇을 받을지. 소스가 23개가 되어도
+새로 쓰는 코드는 맨 아래층뿐이어야 한다.
+
+registry 는 모듈 안에서 `__module__` 이 그 모듈인 `Source` 하위 클래스를 찾는다 —
+`_lawgokr.py` 에서 import 해 온 베이스 클래스는 자동으로 걸러지므로 상속해도 충돌하지 않는다.
 
 ## 실행
 

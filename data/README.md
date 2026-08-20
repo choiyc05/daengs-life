@@ -187,6 +187,8 @@ DB CHECK 제약과 반드시 일치해야 한다. 표기는 **kebab-case로 통�
 | RAG 도메인 | category | subcategory | trust_level |
 |---|---|---|---|
 | 반려동물 생활 종합 해설 (easylaw) | `policy` | `pet-life-guide` | `official` (인용 조문은 `cites`) |
+| 동물보호법 3종 (법·시행령·시행규칙) | `policy` | `animal-protection-act` | `law` |
+| 가축전염병 예방법 3종 | `policy` | `livestock-epidemic-act` | `law` |
 | 동물등록 | `policy` | `registration` | `law` / `official` |
 | 예방접종 — 법정 의무(광견병) | `policy` | `vaccination` | `law` |
 | 예방접종 — 권장 스케줄 | `policy` | `vaccination-schedule` | `guideline` |
@@ -194,6 +196,9 @@ DB CHECK 제약과 반드시 일치해야 한다. 표기는 **kebab-case로 통�
 | 동반 이동 (철도/지하철/버스/항공/검역) | `travel` | `transport-rail` 등 | `official` |
 | 지자체 지원사업 | `policy` | `subsidy` | `official` |
 | 펫보험 | `policy` | `insurance` | `official` |
+
+법령 원문은 한 문서가 여러 도메인을 걸친다 (동물보호법 = 등록 + 맹견). 그래서 문서 단위 subcategory는
+법령 이름으로 두고, `registration`·`leash-muzzle` 같은 세부 분류는 **조문 단위로 쪼갠 뒤**(D-004) 붙인다.
 
 접종 스케줄이 `care`에서 `policy`로 옮겨진 이유 — `care`를 없앤 대신 **`trust_level`이 그 구분을 대신한다.**
 `guideline`은 원래 "접종 스케줄처럼 법정 근거가 없는 문서" 구분용으로 만든 등급이라 역할이 겹쳤다.

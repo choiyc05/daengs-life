@@ -18,20 +18,15 @@ from urllib.parse import parse_qs, urljoin, urlsplit
 
 from bs4 import BeautifulSoup
 
+from ..core import textutil
 from ..core.fetch import FetchResult, Fetcher
 from .base import Extracted, Source, Target
 
 BASE = "https://www.easylaw.go.kr"
 CSM_SEQ = "1809"
 
-WS = re.compile(r"\s+")
 _RE_PUBLISHED = re.compile(r"이 정보는\s*(\d{4})년\s*(\d{1,2})월\s*(\d{1,2})일\s*기준")
-# 「법령명」 뒤에 이어지는 조항 나열 (예: 「동물보호법」 제2조 제5호, 제23조 제1항, 101조제2항제5호)
-_RE_LAW = re.compile(r"「([^」]{2,40})」\s*((?:제?\s*\d+조(?:의\d+)?[^「。]*?)(?=[。.]|「|$))", re.S)
-_RE_ART = re.compile(r"제?\s*(\d+조(?:의\d+)?(?:\s*제\s*\d+항)?(?:\s*제\s*\d+호)?)")
 
-_BLOCK_TAGS = ["p", "div", "li", "ul", "ol", "dl", "dt", "dd", "tr", "table",
-               "h1", "h2", "h3", "h4", "h5", "h6"]
 _NOISE = [
     re.compile(r"인쇄체크"),
     re.compile(r"^문화/여가생활\s*:\s*반려동물과 생활하기\s*:\s*", re.M),      # 100문100답 머리말
@@ -108,30 +103,13 @@ class EasylawPet(Source):
         for t in box.select("script, style, .copyImgAddress, .info_box"):
             t.decompose()
         text = self._block_text(box)
-        return Extracted(title=title, text=text, published_at=published, cites=self._cites(text))
+        return Extracted(title=title, text=text, published_at=published, cites=textutil.cites(text))
 
     @staticmethod
     def _block_text(box) -> str:
-        """블록 요소 경계만 줄바꿈으로, 인라인(a/span 등)은 공백으로 잇는다."""
-        for br in box.find_all("br"):
-            br.replace_with("\n")
-        for tag in box.find_all(_BLOCK_TAGS):
-            tag.append("\n")
-        lines = [WS.sub(" ", ln).strip() for ln in box.get_text(" ").split("\n")]
-        text = "\n".join(ln for ln in lines if ln)
+        """공통 블록 추출 + 이 사이트 고유 노이즈 제거."""
+        text = textutil.block_text(box)
         for pat in _NOISE:
             text = pat.sub(lambda mm: "(" if mm.group(0).lstrip().startswith("(") else
                            (")" if mm.group(0).rstrip().endswith(")") else ""), text)
-        text = re.sub(r"[ \t]*\n[ \t]*", "\n", text)
-        text = re.sub(r" {2,}", " ", text)
-        return re.sub(r"\n{3,}", "\n\n", text).strip()
-
-    @staticmethod
-    def _cites(text: str) -> list[str]:
-        out: list[str] = []
-        for law, tail in _RE_LAW.findall(text):
-            for art in _RE_ART.findall(tail):
-                c = f"{law} 제{WS.sub('', art)}"
-                if c not in out:
-                    out.append(c)
-        return out
+        return textutil.squeeze(text)
