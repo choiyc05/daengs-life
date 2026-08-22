@@ -21,7 +21,7 @@
 - frontend: Next.js (단순 확인용)
 - 로컬: `docker compose up -d` (컨테이너 `daengs_life_db`, DB명 `lifedb`, init은 `db/init/`)
 
-## 현재 상태 (2026-08-20 기준)
+## 현재 상태 (2026-08-22 기준)
 - 완료: 데이터 소스 조사(`docs/data-sources.md` — 파트별 체크리스트), 실시간 API 조사+GPS 결론(`docs/realtime-apis.md`), DB 기동·스키마 검증
 - **수집 28건 — §1 공통·법령 파트 전체 완료**
   - `easylaw-pet` 14 (해설 + 100문100답 → D-007 골든셋 재료)
@@ -31,13 +31,18 @@
   D-011 법령 웹 원문 경로 / D-012 소스 도메인 분류·API 키 규칙 / D-013 MCP 미채택 / D-014 env 배치·의존방향 가드 /
   D-015 pydantic-settings / D-016 법령 API 수집 완료 / **D-004 청킹 전략(구조 기반)** /
   **D-018 인덱싱 패키지 경계(`backend/rag/`)·파서 3층·공통 IR 6종** / **D-019 parsed 산출물 규약** / **D-020 별표 표 파싱**
-- 논의중(🔶): D-003 하이브리드·리랭커, D-005 실행순서, D-006 EDA 시스템화, D-007 평가 체계
+- 논의중(🔶): **D-021 청커 5결정 — ①입력범위 ✅확정 / ②길이기준 B안 잠정 / ③~⑤ 미논의** (진행중, 여기부터 재개) /
+  D-003 하이브리드·리랭커, D-005 실행순서, D-006 EDA 시스템화, D-007 평가 체계
 - **다음 목표: 수집한 28건 전부로 RAG 한 세트 관통** (아래 9단계). 소스 추가는 그 뒤로 미룸
+- ⚠️ `data/` 는 미추적(D-017)이라 **PC 마다 상태가 다르다.** 새 PC 에서는 `backend/.env` 에 LAW_OC 를 넣고
+  4소스(`easylaw-pet`·`law-animal-protection`·`law-livestock-epidemic`·`law-drf-api`)를 재수집 → `rag parse` 하면
+  28건/22 parsed 가 복원된다 (2026-08-22 실제로 복원, 요소 수 동일 재현 확인)
 
 ### RAG 관통 실행 순서
 1. ~~**D-004 확정**~~ ✅ 2026-08-20 — 질문 1~7 정답 위치를 원문에서 확인, 구조 기반 전략 + 판정표 확정
 2. ~~**파서**~~ ✅ 2026-08-21 — `backend/rag/` 신설, `processed/parsed/*.jsonl` **22건** (article 629 · para 552 · table 89 · heading 97 · aside 27 · qa 10). 서식 126건·웹 원문 6건 제외
-3. **청커** → `data/processed/chunks/*.jsonl` · **검문소① 질문 1~7의 정답 청크가 하나씩 실재하는지 눈으로 확인**
+3. **청커** ← **지금 여기.** 규칙 논의가 D-021 (①확정 ②잠정 ③~⑤ 미논의) → 확정 후 `rag/chunk.py` 구현 →
+   `data/processed/chunks/*.jsonl` · **검문소① 질문 1~7의 정답 청크가 하나씩 실재하는지 눈으로 확인**
 4. **임베딩 3종** → `data/processed/embeddings/{model}.parquet` (DB 밖 오프라인, D-002)
    `BAAI/bge-m3`(기준선) · `nlpai-lab/KURE-v1`(한국어 튜닝, bge-m3 파생) · `Qwen/Qwen3-Embedding-0.6B`(계열 다름+영어) — 셋 다 1024 native
 5. **골든셋 시드** — 질문 7개 + easylaw Q/A 7개 = 14건
@@ -53,6 +58,6 @@
 
 준비물: `GEMINI_API_KEY`(9단계) · `uv sync --group ml`(4단계, torch) · 모델 3종 디스크 ~6GB
 - 테스트: `cd backend && uv run pytest` (의존 방향 가드 + 설정 로딩)
-- 필요 키(**`backend/.env`**): LAW_OC ✅발급완료 / DATA_GO_KR_KEY·KAKAO_REST_KEY 미발급 — 발급처는 docs/data-sources.md §9
+- 필요 키(**`backend/.env`**): LAW_OC ✅발급완료·설정완료 / DATA_GO_KR_KEY·KAKAO_REST_KEY 미발급 — 발급처는 docs/data-sources.md §9
   - env 배치는 배포 단위 기준(D-014): 루트 `.env`=인프라(compose), `backend/.env`=백엔드 런타임, `frontend/.env`=프론트
   - 읽는 순서 실제 환경변수 > `backend/.env` > 루트 `.env`. 컨테이너에선 `DAENGS_DATA_DIR` 로 data/ 위치 지정
