@@ -18,8 +18,10 @@ data/
 ├── processed/        # 가공 산출물 — 단계별 분리
 │   ├── parsed/       #   구조 추출 (jsonl) — 원본 1건 = 1파일, 1행 헤더 + 요소 (D-019)
 │   ├── chunks/       #   청킹 (jsonl) — DB 적재 입력
-│   └── embeddings/   #   벡터 (parquet)
-├── eval/             # 골든셋 (golden_v1.jsonl) — D-007. git 관리 대상
+│   ├── embeddings/   #   벡터 (parquet)
+│   └── eval/         #   6단계 3파전 문항별 top-k 덤프 (jsonl) — 기계 산출물이라 무시 (D-024 ④)
+├── eval/             # 손으로 만드는 평가 자산 자리. git 관리 대상이나 **지금은 비어 있다** —
+│                   #   골든셋은 D-022 ⑥으로 backend/rag/stages/goldenset.yaml 로 갔다
 └── reference/        # 정적 참조 데이터 (에어코리아 측정소 목록, 기상청 격자 변환표 등)
 ```
 
@@ -35,7 +37,7 @@ data/
 | `raw/**/*.meta.json` | ❌ 무시 (D-017 에서 변경) |
 | `manifests/crawl_log.jsonl` | ❌ 무시 |
 | `processed/**` | ❌ 무시 |
-| `eval/`, `reference/` | ✅ 커밋 — 손으로 만드는 것이라 성격이 다르다 |
+| `eval/`, `reference/` | ✅ 커밋 — 손으로 만드는 것이라 성격이 다르다. **기계 산출물은 여기 오지 않는다** (D-024 ④) |
 
 **원본을 커밋하지 않는 이유** — 이 레포는 public이다. 정부 자료는 공공누리로 재배포가 되지만
 **펫보험 약관은 보험사 저작물**이라 그대로 올리는 것은 리스크가 있다.
