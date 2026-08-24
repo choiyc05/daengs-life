@@ -1,6 +1,9 @@
 # 설계 결정 기록 (Decision Log)
 
 > 상태: ✅ 확정 · 🔶 제안(논의중) · ⏸ 보류. 결정이 뒤집히면 지우지 말고 상태 변경 + 사유 추가.
+>
+> **이 파일은 공통 인프라와 파트①(제도·문서형 RAG)의 `D-` 결정을 담는다.**
+> 파트②(실시간 조회형)는 [decisions-realtime.md](decisions-realtime.md) 의 `RT-` 를 쓴다 — 이유는 그 파일 헤더에.
 
 ---
 
@@ -1149,3 +1152,4 @@ data/raw/law/law-drf-api-...xml + .meta.json{"source_id":"law-drf-api","domain":
 - 구현 시 만들 것: `backend/rag/chunk.py`(신규) · `tests/test_chunk.py`(검문소①을 테스트로 고정) ·
   `ir.py` 에 `Chunk` 모델 · `io.py` 청크 입출력 · `__main__.py` 에 `chunk` 서브커맨드.
   `config.CHUNK_DIR` 은 이미 있다
+
