@@ -17,14 +17,14 @@ GPS ──geo──▶ 조회 키(격자·측정소·행정동) ──providers�
 
 ```
 realtime/
-├── __main__.py       CLI: config  (geo·walk 이 3·7단계에서 붙는다)
+├── __main__.py       CLI: config · geo  (walk 이 7단계에서 붙는다)
 ├── config.py         Settings 키 3종 + 경로. 키는 읽는 즉시 정규화
 ├── transport/        ① 전송 층 — 인증·봉투·에러코드·재시도 (3 모듈)
 │   ├── datagokr.py     serviceKey + response.header/body.items   ← 5종이 공유
 │   ├── kakao.py        KakaoAK 헤더 + documents[]
 │   └── kmahub.py       authKey + typ01 텍스트/CSV · typ02 JSON
 ├── providers/        ② 소스 층 — API 서비스 하나 = 모듈 하나 (7 모듈)
-├── geo.py            WGS84 → 기상청 LCC 격자(nx,ny) · TM · 최근접 측정소
+├── geo.py            ✅ WGS84 → LCC 격자 · 하버사인 최근접 · 같은 격자 판정(⑤-d)
 ├── observation.py    ★ 공통 관측 모델 = provider 와 룰 사이의 계약 (RT-001 ②)
 ├── rules.py          산책 적합도 판정 — 축 3개, 최악 우선 (③)
 └── cache.py          신선도·TTL·single-flight (④)
@@ -53,7 +53,8 @@ N 은 `providers/` 7개이고 걔들이 공유하는 것은 이미 `transport/` 
 
 ```bash
 cd backend
-uv run python -m realtime config     # 키·경로가 실제로 읽히는지
+uv run python -m realtime config              # 키·경로가 실제로 읽히는지
+uv run python -m realtime geo 37.4979 127.0276   # 위경도 → 격자·대표점
 ```
 
 ⚠️ `DATA_GO_KR_KEY` 는 포털이 **Encoding / Decoding 두 벌**로 준다. 맞는 것은 Decoding 쪽인데

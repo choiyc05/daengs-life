@@ -1,8 +1,9 @@
 """CLI.
 
-  python -m realtime config          # 키·경로가 실제로 읽히는지
+  python -m realtime config              # 키·경로가 실제로 읽히는지
+  python -m realtime geo 37.4979 127.0276  # 위경도 → 격자·대표점
 
-`geo`·`walk` 서브커맨드가 3·7단계에서 같은 자리에 붙는다 (RT-001 구현 계획).
+`walk` 서브커맨드가 7단계에서 같은 자리에 붙는다 (RT-001 구현 계획).
 crawler·rag 와 같은 방식이다 — FastAPI 없이 단독으로 돈다 (D-001 원칙 1).
 """
 from __future__ import annotations
@@ -10,7 +11,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from . import config
+from . import config, geo
 
 # 윈도우 콘솔 기본 인코딩(cp949)으로는 한글이 깨지고 일부 기호는 예외를 낸다 (crawler·rag CLI 와 같은 처리).
 for _stream in (sys.stdout, sys.stderr):
@@ -47,12 +48,30 @@ def cmd_config(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_geo(args: argparse.Namespace) -> int:
+    """위경도 하나를 조회 키로 바꿔 보여준다. 격자가 한 칸 어긋나도 API 는 정상 응답을 주므로
+    눈으로 확인할 자리가 필요하다 — 검산 4지점은 `tests/test_geo.py` 에 박혀 있다."""
+    here = geo.LatLon(args.lat, args.lon)
+    grid = geo.to_grid(here)
+    center = geo.to_latlon(grid)
+    print(f"  입력    {here.lat:.6f}, {here.lon:.6f}")
+    print(f"  격자    nx={grid.nx} ny={grid.ny}   (기상청 단기예보 5km 격자)")
+    print(f"  대표점  {center.lat:.6f}, {center.lon:.6f}   "
+          f"입력에서 {geo.haversine_km(here, center):.2f}km")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m realtime", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_config = sub.add_parser("config", help="키·경로가 실제로 읽히는지 확인")
     p_config.set_defaults(func=cmd_config)
+
+    p_geo = sub.add_parser("geo", help="위경도 → 격자·대표점")
+    p_geo.add_argument("lat", type=float)
+    p_geo.add_argument("lon", type=float)
+    p_geo.set_defaults(func=cmd_geo)
 
     args = parser.parse_args(argv)
     return args.func(args)
