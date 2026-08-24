@@ -37,9 +37,10 @@ STAGES: list[Stage] = [
           consumes="processed/chunks/", produces="processed/embeddings/", adr="D-002"),
     Stage("goldenset", 5, "채점 기준표 15문항",
           consumes="processed/chunks/", produces="rag/stages/goldenset.yaml", adr="D-022"),
+    Stage("evaluate", 6, "3파전 채점 · 승자 1종 선정",
+          consumes="processed/embeddings/", produces="processed/eval/", adr="D-024"),
     # 아래는 아직 없다. 붙는 순서를 여기서 먼저 고정해 둔다 —
     # D-003 이 확정되면 search 와 generate 사이에 한 줄이 는다. 파일명은 안 바뀐다.
-    # Stage("evaluate",  6, "3파전 Hit@k·Recall@k·MRR", ...),
     # Stage("load",      7, "승자 1종만 documents 적재", ...),
     # Stage("search",    8, "dense 검색 CLI", ...),
     # Stage("generate",  9, "Gemini 답변 생성", ...),

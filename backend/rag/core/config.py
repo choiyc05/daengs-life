@@ -14,3 +14,6 @@ PROCESSED_DIR: Path | None = DATA_DIR / "processed" if DATA_DIR else None
 PARSED_DIR: Path | None = PROCESSED_DIR / "parsed" if PROCESSED_DIR else None
 CHUNK_DIR: Path | None = PROCESSED_DIR / "chunks" if PROCESSED_DIR else None
 EMBED_DIR: Path | None = PROCESSED_DIR / "embeddings" if PROCESSED_DIR else None
+# 6단계 3파전 덤프. **미추적이다** — 기계 산출물이고 chunk_id 의 수집 날짜에 묶여 재수집하면
+# 통째로 낡는다. 판단이 남는 자리는 `docs/decisions.md` 의 D-024 다 (D-024 ④).
+EVAL_DIR: Path | None = PROCESSED_DIR / "eval" if PROCESSED_DIR else None

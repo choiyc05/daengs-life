@@ -146,6 +146,25 @@ def chunk_files() -> list[Path]:
     return sorted(config.CHUNK_DIR.glob("*.jsonl"))
 
 
+# ---------------------------------------------------------------- 6단계: eval/ (D-024 ④)
+def eval_path(model_key: str) -> Path:
+    return config.EVAL_DIR / f"{model_key}.jsonl"
+
+
+def write_eval(header: BaseModel, items: list[BaseModel]) -> Path:
+    """1행 헤더 + 2행부터 문항. parsed·chunks 와 같은 파일 모양이라 `read()` 를 그대로 쓴다.
+
+    **여기 쓰는 것은 판단이 아니라 물증이다.** 판정 요약은 이 파일이 아니라 D-024 로 간다 —
+    이 덤프는 미추적이고 재수집하면 `chunk_id` 가 바뀌어 통째로 낡기 때문이다 (D-024 ④).
+    """
+    path = eval_path(header.model_key)        # type: ignore[attr-defined]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="\n") as f:
+        for model in [header, *items]:
+            f.write(json.dumps(model.model_dump(exclude_none=True), ensure_ascii=False) + "\n")
+    return path
+
+
 def read_chunks(path: Path) -> Iterator[dict[str, Any]]:
     """헤더를 건너뛰고 청크 행만. 4단계 임베더는 파일 경계를 무시하고 이것만 이어 붙인다."""
     for row in read(path):

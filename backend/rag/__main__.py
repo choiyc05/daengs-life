@@ -9,8 +9,10 @@
   python -m rag show <chunk_id 조각>                  # 검문소①용 — 청크를 눈으로 본다
   python -m rag goldenset                             # 골든셋 라벨이 실재하는지 검사 (D-022)
   python -m rag goldenset -v                          # 문항별 라벨까지 전부
+  python -m rag evaluate                              # 6단계 3파전 — 채점하고 승자를 고른다 (D-024)
+  python -m rag evaluate --model bge-m3 -v            # 하나만 (판정은 셋이 다 있어야 한다)
 
-`embed`·`load`·`search` 서브커맨드가 4~8단계에서 같은 자리에 붙는다.
+`load`·`search`·`generate` 서브커맨드가 7~9단계에서 같은 자리에 붙는다.
 """
 from __future__ import annotations
 
@@ -21,7 +23,7 @@ import traceback
 
 from .core import config, io
 from .stages import chunk as chunker
-from .stages import embed, goldenset, parse
+from .stages import embed, evaluate, goldenset, parse
 
 # 윈도우 콘솔 기본 인코딩(cp949)으로는 한글이 깨지고 일부 기호는 예외를 낸다 (crawler CLI 와 같은 처리).
 for _stream in (sys.stdout, sys.stderr):
@@ -272,6 +274,71 @@ def cmd_goldenset(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_evaluate(args: argparse.Namespace) -> int:
+    """6단계 3파전 — 채점하고 승자를 고른다 (D-024).
+
+    **골든셋 검증을 먼저 통과해야 채점을 시작한다.** 없는 주소를 가리키는 must 는 그 문항의
+    점수를 영원히 0 으로 만들고, 증상은 "이 모델이 유독 못한다" 로만 나타난다 (D-022 ⑥).
+    같은 이유로 **낡은 parquet 으로는 채점하지 않는다** — 다른 코퍼스를 잰 값이기 때문이다.
+    """
+    gs = goldenset.load()
+    index = goldenset.corpus_index()
+    problems, warnings = goldenset.verify(gs, index)
+    if problems:
+        print(f"골든셋 라벨 {len(problems)}개가 실재하지 않는 청크를 가리킨다 — "
+              "`python -m rag goldenset` 으로 먼저 고칠 것")
+        return 1
+    for w in warnings:
+        print(f"  경고: {w}")
+
+    keys = [args.model] if args.model else list(embed.MODELS)
+    unknown = [k for k in keys if k not in embed.MODELS]
+    if unknown:
+        print(f"모르는 모델: {unknown}   가능: {list(embed.MODELS)}")
+        return 1
+
+    fingerprint = embed.chunks_fingerprint()
+    print(f"골든셋 {len(gs.items)}문항 / 필수 {gs.must_total}  ·  코퍼스 {len(index)}청크  ·  "
+          f"chunks_sha256 {fingerprint[:16]}")
+    print(f"판정 k={evaluate.JUDGE_K}  ·  탈락선 Hit@{evaluate.JUDGE_K} {evaluate.CUT_GAP}문항 차  ·  "
+          f"동률이면 사전 순위 {list(evaluate.PREFERENCE)} (D-024 ①③)")
+
+    summaries: dict[str, dict] = {}
+    for key in keys:
+        if not embed.is_current(key, fingerprint) and not args.force:
+            print(f"  {'STALE':11s} {key} — parquet 이 지금 청크와 다른 코퍼스를 잰 것이다. "
+                  "`python -m rag embed` 먼저 (또는 --force)")
+            return 1
+        print(f"  {'scoring':11s} {key} …", flush=True)
+        res = evaluate.score_model(key, gs, index)
+        if res is None:
+            print(f"  {'MISSING':11s} {key}.parquet 이 없다 — `python -m rag embed` 먼저")
+            return 1
+        items, summary = res
+        summaries[key] = summary
+        if not args.dry_run:
+            path = evaluate.write_dump(key, items, gs, fingerprint)
+            print(f"  {'dumped':11s} {key:22s} -> {path.name}  (미추적, D-024 ④)")
+        if args.verbose:
+            k = evaluate.JUDGE_K
+            for it in items:
+                ranks = ", ".join(str(m["rank"]) for m in it.must)
+                print(f"      [{it.item_id:4s}] hit@{k}={int(it.hit[k])} "
+                      f"recall@{k}={it.recall[k]:.2f}  필수 순위 [{ranks}]  {it.question}")
+
+    if len(summaries) < len(embed.MODELS):
+        print("\n(모델 3종이 다 있어야 판정한다 — 지금은 점수만 냈다)")
+        return 0
+
+    verdict = evaluate.judge({k: s["hit_count"] for k, s in summaries.items()})
+    print()
+    print(evaluate.markdown(summaries, verdict, gs, fingerprint, len(index)))
+    print()
+    print("  ^ 위 markdown 을 docs/decisions.md 의 D-024 에 `### 판정 결과` 로 붙인다 (D-024 ④).")
+    print("    덤프는 미추적이라 이것이 뒤에 남는 전부다.")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="python -m rag")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -314,6 +381,14 @@ def main(argv: list[str] | None = None) -> int:
     gld = sub.add_parser("goldenset", help="골든셋 라벨이 실재하는 청크인지 검사 (D-022)")
     gld.add_argument("-v", "--verbose", action="store_true", help="문항별 라벨을 전부 출력")
     gld.set_defaults(fn=cmd_goldenset)
+
+    ev = sub.add_parser("evaluate", help="6단계 3파전 — 채점하고 승자를 고른다 (D-024)")
+    ev.add_argument("--model", help=f"하나만: {list(embed.MODELS)} (판정은 셋이 다 있어야 한다)")
+    ev.add_argument("--force", action="store_true",
+                    help="parquet 이 지금 청크와 어긋나도 채점한다")
+    ev.add_argument("--dry-run", action="store_true", help="덤프를 쓰지 않는다")
+    ev.add_argument("-v", "--verbose", action="store_true", help="문항별 결과를 전부 출력")
+    ev.set_defaults(fn=cmd_evaluate)
 
     args = p.parse_args(argv)
     return args.fn(args)
