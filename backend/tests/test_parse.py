@@ -14,8 +14,9 @@ import collections
 
 import pytest
 
-from rag import io, registry
-from rag.ir import ELEMENT_ADAPTER
+from rag.core import io
+from rag.stages.parse import registry
+from rag.core.ir import ELEMENT_ADAPTER
 
 pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
 

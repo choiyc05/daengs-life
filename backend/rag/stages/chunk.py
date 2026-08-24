@@ -17,8 +17,8 @@ from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import io
-from .ir import Chunk, ChunkSet
+from ..core import io
+from ..core.ir import Chunk, ChunkSet
 
 NAME = "structure"
 VERSION = 1

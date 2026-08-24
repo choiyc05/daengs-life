@@ -7,31 +7,56 @@ data/raw  ──parse──▶ processed/parsed ──chunk──▶ processed/c
           ──embed──▶ processed/embeddings ──load──▶ postgres ──search──▶ app
 ```
 
+## 배치 — 순서가 있느냐로 가른다 (D-023)
+
 ```
 rag/
-├── __main__.py     CLI: list / parse / chunk / show / embed   ← load·search 가 같은 자리에 붙는다
-├── config.py       경로. data/ 탐색은 crawler.core.config 것을 그대로 쓴다
-├── ir.py           ★ 공통 중간 표현 6종 + Chunk/ChunkSet — 계층 간 계약
-├── io.py           parsed/·chunks/ 입출력, 상류 해시 비교로 재실행 스킵
-├── chunk.py        ★ 타입 기반 단일 청커 (D-021) — 소스별 분기가 생기면 안 된다
-├── embed.py        모델 3종 레지스트리 · 토큰 가드 · parquet (D-002)
-├── registry.py     meta 의 source_id → 파서 모듈 (스캔하지 않고 경로를 계산)
-├── extract/                                     ← ① 포맷 층. 사이트를 모른다
-│   └── boxtable.py 괘선 아트 표 파서 (D-020)
-└── parsers/                                     ← ② 사이트 층
-    ├── base.py     NAME / VERSION / parse() 계약
-    └── law/
-        ├── law_drf_api.py   법령 API XML — 조문·항·호·목 / 부칙 / 별표
-        └── easylaw_pet.py   생활법령 해설 HTML — 소제목 계층 / 100문100답
+├── __main__.py       CLI: list / parse / chunk / show / embed / goldenset
+├── pipeline.py       ★ 단계·순서의 단일 소스
+├── core/                                        ← 순서가 없는 것. 모든 단계가 쓴다
+│   ├── config.py     경로. data/ 탐색은 crawler.core.config 것을 그대로 쓴다
+│   ├── io.py         raw/·parsed/·chunks/ 입출력, 상류 해시 비교로 재실행 스킵
+│   └── ir.py         ★ 공통 중간 표현 6종 + Chunk/ChunkSet — 계층 간 계약
+└── stages/                                      ← 순서가 있는 것. 여기 있으면 한 단계다
+    ├── parse/                                   2단계 (안에 D-018 의 3층이 있다)
+    │   ├── __init__.py   status() / parse_doc() — CLI 는 출력만 한다
+    │   ├── registry.py   meta 의 source_id → 파서 모듈 (스캔하지 않고 경로를 계산)
+    │   ├── extract/                             ← ① 포맷 층. 사이트를 모른다
+    │   │   └── boxtable.py  괘선 아트 표 파서 (D-020)
+    │   └── parsers/                             ← ② 사이트 층
+    │       ├── base.py   NAME / VERSION / parse() 계약
+    │       └── law/
+    │           ├── law_drf_api.py   법령 API XML — 조문·항·호·목 / 부칙 / 별표
+    │           └── easylaw_pet.py   생활법령 해설 HTML — 소제목 계층 / 100문100답
+    ├── chunk.py      3단계 ★ 타입 기반 단일 청커 (D-021) — 소스별 분기가 생기면 안 된다
+    ├── embed.py      4단계 모델 3종 레지스트리 · 토큰 가드 · parquet (D-002)
+    ├── goldenset.py  5단계 채점 기준표 로드·검증 (D-022)
+    ├── goldenset.yaml      15문항 · 필수 43 — git 추적
+    └── (evaluate · load · search · generate 가 같은 자리에 붙는다)
 ```
+
+**폴더 두 개가 곧 판정 기준이다.** `stages/` 에 있으면 파이프라인의 한 단계이고 `pipeline.py` 의
+`STAGES` 에 한 줄이 있어야 한다. `core/` 에 있으면 아니다. 새 파일을 어디 둘지 고민할 자리가 없다.
+
+**순서를 파일 이름에 박지 않은 이유** — `s3_chunk.py` 로 하면 목록만 봐도 순서가 보이지만
+**단계 번호는 계획이지 불변 식별자가 아니다.** D-003(하이브리드·리랭커)이 확정되면 8·9단계 사이에
+끼어들고 그 순간 뒤 파일이 전부 개명된다. 바뀌는 값은 이름이 아니라 리스트에 둔다
+(D-022 ⑥B 가 `chunk_id` 에서 수집 날짜를 뺀 것과 같은 판단).
+
+**임포트는 두 단계 이상 올라가면 절대 경로.** `from ....core.ir import` 는 사람이 점을 셀 수 없고
+파일을 한 칸 옮기면 조용히 다른 곳을 가리킨다.
+
+### parse 단계 안의 3층
 
 **레이어는 crawler 와 같은 모양이다** (D-018). 소스가 20개가 되어도 새로 쓰는 코드는 ②뿐이어야 한다.
 
 | 층 | 위치 | 아는 것 |
 |---|---|---|
-| ① 포맷 | `extract/` | PDF·HWPX·괘선표를 어떻게 여나. 소스를 모른다 |
-| ② 사이트 | `parsers/{domain}/{source_id}.py` | 그 사이트의 태그·클래스·표 관례 |
-| ③ 계약 | `ir.py` | 산출물 모양. 청커·임베더·적재기는 이것만 안다 |
+| ① 포맷 | `stages/parse/extract/` | PDF·HWPX·괘선표를 어떻게 여나. 소스를 모른다 |
+| ② 사이트 | `stages/parse/parsers/{domain}/{source_id}.py` | 그 사이트의 태그·클래스·표 관례 |
+| ③ 계약 | `core/ir.py` | 산출물 모양. 청커·임베더·적재기는 이것만 안다 |
+
+③ 만 `core/` 에 있는 이유 — IR 은 파싱 전용이 아니라 **전 단계가 공유하는 계약**이다.
 
 ## 왜 파서 개수가 늘어도 괜찮은가
 
@@ -60,7 +85,8 @@ uv run python -m rag parse --force               # 원본이 그대로여도 다
 uv run python -m rag chunk                       # parsed → chunks (바뀐 것만)
 uv run python -m rag chunk --dry-run             # 쓰지 않고 집계만
 uv run python -m rag show "별표 4-2-라" --full    # 청크를 눈으로 (검문소①)
-uv run pytest tests/test_parse.py tests/test_chunk.py tests/test_boxtable.py
+uv run python -m rag goldenset -v                 # 골든셋 라벨 실존 검사 (D-022)
+uv run pytest                                    # 83개 (가중치 로드분은 -m slow)
 ```
 
 `list` 의 표시는 셋이다 — `x` 파서 있음 / `(공백)` 파서 없음(할 일) / `-` 인덱싱 대상 아님(결정).
@@ -85,10 +111,10 @@ uv run pytest tests/test_parse.py tests/test_chunk.py tests/test_boxtable.py
 ## 파서 하나 추가하는 절차
 
 1. **정찰** — `raw/` 원본을 열어 구조를 확인한다. 태그·클래스에 계층이 이미 있으면 그것을 쓴다
-2. **모듈** — `parsers/{domain}/{source_id}.py` 에 `NAME` / `VERSION` / `parse(raw, doc) -> Parsed`
+2. **모듈** — `stages/parse/parsers/{domain}/{source_id}.py` 에 `NAME` / `VERSION` / `parse(raw, doc) -> Parsed`
    - 도메인 폴더가 없으면 만든다 (`__init__.py` 없이 — namespace 패키지)
    - 요소는 **IR 6종만** 쓴다. 새 타입이 필요하면 먼저 D-018 을 갱신한다
-   - 포맷 처리(PDF 열기, 표 격자)는 `extract/` 로 올린다 — 사이트가 달라도 반복되기 때문
+   - 포맷 처리(PDF 열기, 표 격자)는 `stages/parse/extract/` 로 올린다 — 사이트가 달라도 반복되기 때문
 3. **시험** — `parse --dry-run --limit 1 -v` 로 요소 수를 눈으로 본다
 4. **테스트** — `tests/test_parse.py` 에 그 소스의 요소 수와 **질문 정답이 실제로 잡히는지**를 박는다.
    수치를 박아 두면 원문이 개정될 때 여기서 먼저 깨진다 — 6단계 점수만 조용히 떨어지는 것보다 낫다

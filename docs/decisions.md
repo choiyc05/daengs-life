@@ -814,6 +814,12 @@ data/raw/law/law-drf-api-...xml + .meta.json{"source_id":"law-drf-api","domain":
 
 ---
 
+> **경로 정정 (D-023, 2026-08-24)** — 파서 3층의 위치가 `rag/` 최상위에서 **parse 단계 안으로**
+> 옮겨졌다: `rag.parsers.{domain}.{source_id}` → `rag.stages.parse.parsers.{domain}.{source_id}`,
+> `rag/extract/` → `rag/stages/parse/extract/`. **층의 순서도 역할도 그대로다** — 이 3층은
+> "파싱을 어떻게 하나"의 구조이지 패키지 전체의 구조가 아니었으므로, 이동은 D-018 을 뒤집는 것이
+> 아니라 말한 대로 놓는 것이다. `ir.py` 는 파싱 전용이 아니라 전 단계의 계약이라 `rag/core/` 로 갔다.
+
 ## D-019. `parsed/` 산출물 규약 — 파일 단위·ID 층·출처 링크 — ✅ 확정 (2026-08-21)
 
 **배경** — D-018 이 "파서를 어디에 두고 무엇을 뱉을지"(IR 6종)를 정했다. 남은 것은 **그것을 파일에
@@ -1812,3 +1818,114 @@ Q/A 한 건(병원 사체처리, 4건)을 빠뜨린 것이다. `python -m rag go
 - 만들었던 것: `backend/rag/goldenset.yaml`(신규 · 15문항) · `rag/goldenset.py`(로드·검증) ·
   `__main__.py` 에 `goldenset` 서브커맨드(라벨이 실재하는 chunk_id 인지 검사 + 스냅샷 대조) ·
   `tests/test_goldenset.py`(**43개 필수 라벨이 전부 실존하는지 단언** — 검문소①과 같은 방식)
+
+---
+
+## D-023. `rag/` 배치 — 순서 있는 것과 없는 것을 가른다 — ✅ 확정 (2026-08-24)
+
+**배경** — D-018 이 `rag/` 를 만들 때 정한 것은 **파서 층**(포맷 `extract/` → 사이트 `parsers/` → 계약 `ir.py`)
+이었고, 그때는 그것이 패키지의 거의 전부였다. 이후 3·4·5단계가 `chunk.py` · `embed.py` · `goldenset.py` 로
+평평하게 붙으면서 목록이 이렇게 됐다:
+
+```
+chunk.py  config.py  embed.py  extract/  goldenset.py  io.py  ir.py  parsers/  registry.py
+```
+
+**두 가지가 섞여 있다.**
+
+① **순서가 안 보인다.** 실제 순서는 `parse → chunk → embed → goldenset → load → search` 인데
+알파벳순 목록에는 흔적이 없다. 6~9단계에서 `evaluate` · `load` · `search` · `generate` 넷이 더 붙는다.
+
+② **단계마다 모양이 다르다.** 이게 더 큰 혼란의 원인이다.
+
+| 단계 | 지금 어디 있나 |
+|---|---|
+| 2 parse | **자기 모듈이 없다** — `__main__.cmd_parse` + `registry.py` + `parsers/` + `io.py` 에 흩어짐 |
+| 3 chunk | `chunk.py` 하나 |
+| 4 embed | `embed.py` 하나 |
+| 5 골든셋 | `goldenset.py` — 이름만 봐선 단계인지 공용 도구인지 모른다 |
+
+`extract/` · `parsers/` 가 폴더인 것은 **parse 한 단계의 내부 3층**이라 옳다(D-018). 문제는 그
+내부 구조가 **단계들 자체와 같은 평면에 놓여** 있다는 것이다 — 그래서 "왜 얘는 폴더고 얜 파일인가"로 읽힌다.
+
+### 결정 — `core/`(순서 없음) + `stages/`(순서 있음) + `pipeline.py`(순서의 단일 소스)
+
+```
+rag/
+├── __main__.py       CLI — pipeline.STAGES 순서대로 서브커맨드를 등록
+├── pipeline.py       ★ 단계·순서·산출물의 단일 소스
+├── core/             ← 순서가 없는 것. 모든 단계가 쓴다
+│   ├── config.py     경로
+│   ├── io.py         raw/·parsed/·chunks/ 입출력, 상류 해시로 재실행 스킵
+│   └── ir.py         IR 6종 + Chunk/ChunkSet — 계층 간 계약
+└── stages/           ← 순서가 있는 것. 여기 있으면 파이프라인의 한 단계다
+    ├── parse/                  2단계
+    │   ├── __init__.py         parse_doc() — `__main__.cmd_parse` 에 있던 로직
+    │   ├── registry.py         source_id → 파서 모듈
+    │   ├── extract/            ① 포맷 층 (D-018)
+    │   └── parsers/            ② 사이트 층 (D-018)
+    ├── chunk.py                3단계
+    ├── embed.py                4단계
+    ├── goldenset.py/.yaml      5단계
+    └── (evaluate · load · search · generate 가 같은 자리에 붙는다)
+```
+
+**폴더 두 개가 곧 판정 기준이다** — `stages/` 에 있으면 파이프라인의 한 단계이고, `core/` 에 있으면 아니다.
+새 파일을 어디 둘지 고민할 자리가 없어진다.
+
+### 왜 이름에 번호를 박지 않았나 (대안 A 기각)
+
+`s2_parse/` · `s3_chunk.py` · `s4_embed.py` … 로 하면 `ls` 한 번에 순서가 보이고 작업량도 절반이다.
+**기각한 이유는 하나다 — 번호가 곧 바뀐다.**
+
+D-003(하이브리드 검색·리랭커)이 논의중이고, 들어오면 **8단계와 9단계 사이에 끼어든다.** 그 순간
+`s9_generate.py` → `s10_generate.py` 개명이고 임포트·테스트·문서의 `s9` 가 전부 따라간다.
+**단계 번호는 계획이지 불변 식별자가 아닌데** 이름에 박으면 불변인 것처럼 굳는다.
+
+이것은 **D-022 ⑥B 와 같은 판단이다** — 그때도 `chunk_id` 에 박힌 수집 날짜를 라벨에서 뺐다.
+바뀔 값을 식별자에 넣지 않고, 바뀌는 쪽을 한 곳에 모아 대조한다.
+
+| | A 이름에 번호 | **B 한 곳에 모음 (채택)** |
+|---|---|---|
+| 목록만 보고 순서 | ✅ | ❌ (`pipeline.py` 를 봐야 한다) |
+| 단계가 끼어들 때 | 개명 + 임포트 전부 | **리스트에 한 줄** |
+| 새 파일 위치 판단 | 번호를 정해야 한다 | `core/` 냐 `stages/` 냐 |
+| 작업량 | 절반 | 두 배 |
+
+### D-018 의 파서 경로가 바뀐다
+
+```
+rag.parsers.{domain}.{source_id}   ->   rag.stages.parse.parsers.{domain}.{source_id}
+```
+
+`registry.module_name()` 한 줄이다. **D-018 의 3층 자체는 그대로다** — 층의 순서도 역할도 안 바뀌고
+위치만 parse 단계 **안으로** 들어간다. 원래 그 3층은 "파싱을 어떻게 하나"의 구조였지 패키지 전체의
+구조가 아니었으므로, 이 이동은 D-018 을 뒤집는 것이 아니라 **말한 대로 놓는 것**이다.
+
+### 임포트 규칙 — 두 단계 이상 올라가면 절대 경로
+
+`stages/parse/parsers/base.py` 에서 `ir.py` 를 상대 경로로 가리키면 `from ....core.ir import ...` 가 된다.
+점 네 개는 사람이 셀 수 없고, 파일을 한 칸 옮기는 순간 조용히 다른 곳을 가리킨다.
+
+```python
+from rag.core.ir import AnyElement      # 두 단계 이상 -> 절대
+from ..base import Parsed               # 한 단계 -> 상대
+```
+
+### `rag status` 는 이번 범위가 아니다
+
+`pipeline.py` 가 순서를 알면 **"지금 어디까지 됐나"를 코드가 답할 수 있다.** 지금 그 판정이 세 군데에
+흩어져 있다 — `io.is_current()`(parse) · `io.is_chunk_current()`(chunk) · `embed` 의 fingerprint.
+
+다만 이번에는 **배치 이동과 `pipeline.py` 까지만** 한다. `status` 는 `Stage` 에 판정 함수 필드를
+더하는 **추가**라 나중에 붙여도 기존 것이 안 바뀌고, 배치 이동은 기능 변화가 0 이어야 검증이
+"테스트 83개가 그대로 통과하는가" 로 끝나기 때문이다. 둘을 섞으면 실패했을 때 원인이 둘이 된다.
+
+### 재개 조건 / 다음에 할 것
+
+- **`status` 를 붙일 때** — `Stage` 에 `is_current` 를 더하고 세 군데 판정을 그 뒤로 모은다.
+  `pipeline.py` 를 새로 쓰는 것이 아니라 필드 하나가 는다
+- **D-003 이 확정되면** — `STAGES` 리스트의 `search` 와 `generate` 사이에 한 줄 넣는다. 파일명은 안 바뀐다
+- **7번째 IR 타입이나 새 도메인 파서** — 절차는 D-018 그대로이고 경로만 `stages/parse/parsers/` 다
+- 만들 것: `rag/pipeline.py`(신규) · `rag/core/`·`rag/stages/` 로 이동 · `stages/parse/__init__.py`(신규,
+  `cmd_parse` 로직) · `registry.module_name()` 한 줄 · 테스트 5개의 임포트 · `rag/README.md` 갱신

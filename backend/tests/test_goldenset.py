@@ -1,4 +1,4 @@
-"""골든셋 검증 — `backend/rag/goldenset.yaml` 과 `data/processed/chunks/` 실물을 맞춰 본다 (D-022).
+"""골든셋 검증 — `backend/rag/stages/goldenset.yaml` 과 `data/processed/chunks/` 를 맞춰 본다 (D-022).
 
 **검문소①(`test_chunk.py`)과 같은 역할을 5단계에서 한다.** 검문소①은 "정답 청크가 코퍼스에
 존재하나"를 물었고, 여기는 "골든셋이 가리키는 주소가 실재하나"를 묻는다. 둘은 다르다 —
@@ -16,7 +16,8 @@ import collections
 
 import pytest
 
-from rag import goldenset, io
+from rag.core import io
+from rag.stages import goldenset
 
 # 2026-08-24 실측. 라벨을 고치면 여기서 먼저 깨지도록 박아 둔다
 ITEMS = 15

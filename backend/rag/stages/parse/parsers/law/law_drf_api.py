@@ -22,9 +22,9 @@ from urllib.parse import quote
 
 from bs4 import BeautifulSoup
 
-from ...extract import boxtable
-from ...io import RawDoc
-from ...ir import Aside, Article, Heading, Item, Para, Paragraph, SubItem, Table
+from rag.stages.parse.extract import boxtable
+from rag.core.io import RawDoc
+from rag.core.ir import Aside, Article, Heading, Item, Para, Paragraph, SubItem, Table
 from ..base import Parsed
 
 NAME = "law_xml"

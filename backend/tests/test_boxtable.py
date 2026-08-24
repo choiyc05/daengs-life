@@ -6,7 +6,7 @@
 """
 from __future__ import annotations
 
-from rag.extract import boxtable
+from rag.stages.parse.extract import boxtable
 
 
 CLOSED = """\

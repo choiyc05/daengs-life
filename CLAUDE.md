@@ -18,7 +18,7 @@
 - 브랜치에서 작업 후 커밋+푸시. 현재 병렬 2개: `feat/rag`(파트① 3단계 청커) · `feat/realtime`(파트② 착수)
 
 ## 스택
-- backend: FastAPI + uv (Python), LLM은 Gemini API 예정. **`backend/` 는 uv 프로젝트 하나**이고 그 안에 패키지가 셋으로 나뉜다 (D-018): `crawler/` 수집 · `rag/` 인덱싱(parse→chunk→embed→load→search) · `app/` 서빙(예정). 의존 방향은 **app→rag→crawler** 한쪽뿐이고 `tests/test_import_direction.py` 가 막는다.
+- backend: FastAPI + uv (Python), LLM은 Gemini API 예정. **`backend/` 는 uv 프로젝트 하나**이고 그 안에 패키지가 셋으로 나뉜다 (D-018): `crawler/` 수집 · `rag/` 인덱싱 · `app/` 서빙(예정). **`rag/` 안은 순서로 가른다**(D-023) — `pipeline.py`(순서의 단일 소스) · `core/`(config·io·ir) · `stages/`(parse/·chunk·embed·goldenset…). 의존 방향은 **app→rag→crawler** 한쪽뿐이고 `tests/test_import_direction.py` 가 막는다.
   실행: `cd backend && uv run python -m crawler run --source <id>` / `uv run python -m rag parse`
 - DB: postgres + **pgvector 0.8.6** — `documents` 테이블: `embedding vector(1024)`, `content_hash`(중복 방지 자연키), category CHECK(policy/travel/food), source_type CHECK(document/web/api/manual), source_url/document_title/section 컬럼 (조항 인용용) — D-008
 - 오케스트레이션: **Celery + Beat + Redis** (D-001 확정 — Airflow 아님)
@@ -47,18 +47,18 @@
 ### RAG 관통 실행 순서
 1. ~~**D-004 확정**~~ ✅ 2026-08-20 — 질문 1~7 정답 위치를 원문에서 확인, 구조 기반 전략 + 판정표 확정
 2. ~~**파서**~~ ✅ 2026-08-21 — `backend/rag/` 신설, `processed/parsed/*.jsonl` **22건** (article 629 · para 552 · table 89 · heading 97 · aside 27 · qa 10). 서식 126건·웹 원문 6건 제외
-3. ~~**청커**~~ ✅ 2026-08-24 — D-021 ①~⑤ 확정 + `rag/chunk.py` 구현. `processed/chunks/*.jsonl` **1,407청크**
+3. ~~**청커**~~ ✅ 2026-08-24 — D-021 ①~⑤ 확정 + `rag/stages/chunk.py` 구현. `processed/chunks/*.jsonl` **1,407청크**
    (article 720 · table 423 · 부칙 192 · easylaw 소제목 40 · aside 22 · qa 10). **검문소① 통과** — 질문 1~7 정답 청크 12개를
    `tests/test_chunk.py` 가 단언한다. 2,000자 초과 3건은 경고만(④ 폴백 없음) · content 중복 5건 경고 →
    `data/processed/chunks/*.jsonl` · **검문소① 질문 1~7의 정답 청크가 하나씩 실재하는지 눈으로 확인**
 4. ~~**임베딩 3종**~~ ✅ 2026-08-24 — `embeddings/{key}.parquet` 3종 (각 1407×1024, L2 정규화, fp32, 6.4MB)
    `bge-m3`(기준선) · `kure-v1`(한국어 튜닝, bge-m3 파생) · `qwen3-embedding-0.6b`(계열 다름+영어) — 셋 다 1024 native
    **토큰 가드 통과** — 최대 2,026 / 한계 8,192 (25%). Qwen3 만 질의에 공식 지시문을 붙이는 비대칭이라 `encode_query` 를 나눠 뒀다(6단계가 쓴다)
-5. ~~**골든셋 시드**~~ ✅ 2026-08-24 — D-022 ①~⑥ 확정 + `rag/goldenset.yaml` 구현.
+5. ~~**골든셋 시드**~~ ✅ 2026-08-24 — D-022 ①~⑥ 확정 + `rag/stages/goldenset.yaml` 구현.
    검증질문 7 + easylaw Q/A 8 = **15문항 / 필수 43개 · 보강 15 · 분모 제외 8**.
    `uv run python -m rag goldenset` 이 라벨 실존을 검사하고 `tests/test_goldenset.py` 11개가 고정한다.
    정답은 **필수/보강 2층**, Q/A 절반은 법제처의 `관련 법령` 을 그대로 라벨로 쓴다(사람 판단 0).
-   `backend/rag/goldenset.yaml` **git 추적** — `data/` 는 미추적이라 판단 기록이 유실된다.
+   `backend/rag/stages/goldenset.yaml` **git 추적** — `data/` 는 미추적이라 판단 기록이 유실된다.
    라벨은 **수집 날짜를 뺀 논리 주소**(`...-act#제101조③`) — 재수집해도 안 깨진다
 6. **3파전 비교**(Hit@k·Recall@k·MRR 셋 다 산출) · **검문소② 명백히 나쁜 것만 거름** (15건이라 통계적 판정은 불가)
 7. **승자 1종만 DB 적재** (`documents`, `embedding_model` 기록)

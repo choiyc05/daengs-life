@@ -14,7 +14,8 @@ import collections
 
 import pytest
 
-from rag import chunk, io
+from rag.core import io
+from rag.stages import chunk
 
 pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
 

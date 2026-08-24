@@ -19,9 +19,9 @@ import collections
 import sys
 import traceback
 
-from . import chunk as chunker
-from . import config, embed, goldenset, io, registry
-from .ir import Document
+from .core import config, io
+from .stages import chunk as chunker
+from .stages import embed, goldenset, parse
 
 # 윈도우 콘솔 기본 인코딩(cp949)으로는 한글이 깨지고 일부 기호는 예외를 낸다 (crawler CLI 와 같은 처리).
 for _stream in (sys.stdout, sys.stderr):
@@ -29,18 +29,9 @@ for _stream in (sys.stdout, sys.stderr):
         _stream.reconfigure(encoding="utf-8", errors="replace")
 
 
-def _status(doc: io.RawDoc) -> tuple[str, str]:
-    """(라벨, 사유). '인덱싱 안 함'(결정)과 '파서 없음'(할 일)을 섞지 않는다 — D-018."""
-    if doc.source_id in registry.NOT_INDEXED:
-        return "NOT-INDEXED", registry.NOT_INDEXED[doc.source_id]
-    if registry.resolve(doc.domain, doc.source_id) is None:
-        return "TODO", f"파서 없음: {registry.module_name(doc.domain, doc.source_id)}.py"
-    return "OK", ""
-
-
 def cmd_list(args: argparse.Namespace) -> int:
     for doc in io.raw_docs(args.source):
-        label, reason = _status(doc)
+        label, reason = parse.status(doc)
         mark = {"OK": "x", "TODO": " ", "NOT-INDEXED": "-"}[label]
         print(f"[{mark}] {doc.doc_id:44s} {doc.source_id:24s} {reason}")
     print("\n  x=파서 있음   (공백)=파서 없음   -=인덱싱 대상 아님(결정)")
@@ -48,6 +39,10 @@ def cmd_list(args: argparse.Namespace) -> int:
 
 
 def cmd_parse(args: argparse.Namespace) -> int:
+    """raw → parsed. **파싱 자체는 `stages.parse` 가 하고 여기는 출력만 한다** (D-023).
+
+    다른 단계는 전부 자기 모듈에 로직이 있는데 parse 만 CLI 안에 있었다.
+    """
     docs = io.raw_docs(args.source)
     if args.limit:
         docs = docs[: args.limit]
@@ -56,7 +51,7 @@ def cmd_parse(args: argparse.Namespace) -> int:
     total: collections.Counter[str] = collections.Counter()
 
     for doc in docs:
-        label, reason = _status(doc)
+        label, reason = parse.status(doc)
         if label != "OK":
             print(f"  {label:11s} {doc.doc_id:44s} {reason}")
             n_skipped += 1
@@ -67,50 +62,23 @@ def cmd_parse(args: argparse.Namespace) -> int:
                 print(f"  {'same':11s} {doc.doc_id}")
             continue
 
-        mod = registry.resolve(doc.domain, doc.source_id)
         try:
-            parsed = mod.parse(doc.path.read_bytes(), doc)
+            header, elements, counts = parse.parse_doc(doc)
         except Exception:
             print(f"  {'FAIL':11s} {doc.doc_id}\n{traceback.format_exc()}")
             n_failed += 1
             continue
 
-        counts = collections.Counter(e.type for e in parsed.elements)
-        total += counts
-        meta = doc.meta
-        header = Document(
-            doc_id=doc.doc_id,
-            source_id=doc.source_id,
-            domain=doc.domain,
-            category=meta["category"],
-            subcategory=meta.get("subcategory") or "",
-            trust_level=meta.get("trust_level") or "",
-            source_type=meta.get("source_type") or "",
-            format=meta.get("format") or "",
-            license=meta.get("license") or "",
-            document_title=parsed.document_title or meta.get("document_title") or "",
-            published_at=parsed.published_at or meta.get("published_at"),
-            source_url=meta.get("source_url"),
-            # 파서가 풀어 준 값이 없으면 원본을 받은 곳을 그대로 쓴다 (easylaw 처럼 둘이 같은 경우)
-            citation_url=parsed.citation_url or meta.get("source_url"),
-            raw_file=meta["raw_file"],
-            raw_sha256=meta["sha256"],
-            parser=mod.NAME,
-            parser_version=mod.VERSION,
-            parsed_at=io.now_kst(),
-            counts={**counts, **parsed.counts},
-            warnings=parsed.warnings,
-            extra=parsed.extra,
-        )
+        total += collections.Counter(counts)
         n_parsed += 1
         if args.dry_run:
-            print(f"  {'(dry-run)':11s} {doc.doc_id:44s} {dict(counts)}")
+            print(f"  {'(dry-run)':11s} {doc.doc_id:44s} {counts}")
         else:
-            path = io.write(header, parsed.elements)
-            print(f"  {'parsed':11s} {doc.doc_id:44s} {dict(counts)}")
+            path = io.write(header, elements)
+            print(f"  {'parsed':11s} {doc.doc_id:44s} {counts}")
             if args.verbose:
                 print(f"              -> {path}")
-        for w in parsed.warnings:
+        for w in header.warnings:
             print(f"              ! {w}")
 
     print(f"\n요소 합계: {dict(sorted(total.items()))}")

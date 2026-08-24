@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import pytest
 
-from rag import embed
+from rag.stages import embed
 
 pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
 

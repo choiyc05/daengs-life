@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from . import config, io
+from ..core import config, io
 
 VERSION = 1
 DIM = 1024                # D-002 — 세 모델 모두 1024 native. 다르면 비교 자체가 성립하지 않는다

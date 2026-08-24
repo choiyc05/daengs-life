@@ -22,9 +22,9 @@ from typing import Literal
 import yaml
 from pydantic import BaseModel, ConfigDict
 
-from . import io
+from ..core import io
 
-GOLDENSET_PATH = Path(__file__).with_name("goldenset.yaml")
+GOLDENSET_PATH = Path(__file__).with_name("goldenset.yaml")   # 이 파일 옆 (D-023)
 
 _DATE_SUFFIX = re.compile(r"__\d{8}")
 
