@@ -50,8 +50,9 @@
    (article 720 · table 423 · 부칙 192 · easylaw 소제목 40 · aside 22 · qa 10). **검문소① 통과** — 질문 1~7 정답 청크 12개를
    `tests/test_chunk.py` 가 단언한다. 2,000자 초과 3건은 경고만(④ 폴백 없음) · content 중복 5건 경고 →
    `data/processed/chunks/*.jsonl` · **검문소① 질문 1~7의 정답 청크가 하나씩 실재하는지 눈으로 확인**
-4. **임베딩 3종** → `data/processed/embeddings/{model}.parquet` (DB 밖 오프라인, D-002)
-   `BAAI/bge-m3`(기준선) · `nlpai-lab/KURE-v1`(한국어 튜닝, bge-m3 파생) · `Qwen/Qwen3-Embedding-0.6B`(계열 다름+영어) — 셋 다 1024 native
+4. ~~**임베딩 3종**~~ ✅ 2026-08-24 — `embeddings/{key}.parquet` 3종 (각 1407×1024, L2 정규화, fp32, 6.4MB)
+   `bge-m3`(기준선) · `kure-v1`(한국어 튜닝, bge-m3 파생) · `qwen3-embedding-0.6b`(계열 다름+영어) — 셋 다 1024 native
+   **토큰 가드 통과** — 최대 2,026 / 한계 8,192 (25%). Qwen3 만 질의에 공식 지시문을 붙이는 비대칭이라 `encode_query` 를 나눠 뒀다(6단계가 쓴다)
 5. **골든셋 시드** — 질문 7개 + easylaw Q/A 7개 = 14건
 6. **3파전 비교**(Hit@5·MRR) · **검문소② 명백히 나쁜 것만 거름** (14건이라 통계적 판정은 불가)
 7. **승자 1종만 DB 적재** (`documents`, `embedding_model` 기록)
@@ -63,7 +64,8 @@
 4. 로트와일러인데 맹견인가요 / 5. 맹견 사육 허가 필요한가요 / 6. 광견병 접종 의무인가요 /
 7. 국립공원에 강아지 가능한가요 / ~~8. KTX~~ ~~9. 서울 지원금~~ ~~10. 펫보험 슬개골~~ (소스 미수집)
 
-준비물: `GEMINI_API_KEY`(9단계) · `uv sync --group ml`(4단계, torch) · 모델 3종 디스크 ~6GB
+준비물: `GEMINI_API_KEY`(9단계) · ~~`uv sync --group ml`~~ ✅ · ~~모델 3종 디스크~~ ✅ **실측 ~10GB**(bge-m3 6.5 · KURE 2.2 · Qwen3 1.2)
+  - GPU 는 RTX 3050 **6GB** — fp32 모델 3종이 합쳐 ~7GB 라 **한 프로세스에서 연속 로드하면 VRAM 이 누적돼 마지막 모델이 10배 넘게 느려진다.** `rag.embed.release()` 로 모델마다 내린다
 - 테스트: `cd backend && uv run pytest` (의존 방향 가드 + 설정 로딩)
 - 필요 키(**`backend/.env`**): LAW_OC ✅발급완료·설정완료 / DATA_GO_KR_KEY·KAKAO_REST_KEY 미발급 — 발급처는 docs/data-sources.md §9
   - env 배치는 배포 단위 기준(D-014): 루트 `.env`=인프라(compose), `backend/.env`=백엔드 런타임, `frontend/.env`=프론트

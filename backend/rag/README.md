@@ -9,11 +9,12 @@ data/raw  ──parse──▶ processed/parsed ──chunk──▶ processed/c
 
 ```
 rag/
-├── __main__.py     CLI: list / parse / chunk / show   ← embed·load·search 가 같은 자리에 붙는다
+├── __main__.py     CLI: list / parse / chunk / show / embed   ← load·search 가 같은 자리에 붙는다
 ├── config.py       경로. data/ 탐색은 crawler.core.config 것을 그대로 쓴다
 ├── ir.py           ★ 공통 중간 표현 6종 + Chunk/ChunkSet — 계층 간 계약
 ├── io.py           parsed/·chunks/ 입출력, 상류 해시 비교로 재실행 스킵
 ├── chunk.py        ★ 타입 기반 단일 청커 (D-021) — 소스별 분기가 생기면 안 된다
+├── embed.py        모델 3종 레지스트리 · 토큰 가드 · parquet (D-002)
 ├── registry.py     meta 의 source_id → 파서 모듈 (스캔하지 않고 경로를 계산)
 ├── extract/                                     ← ① 포맷 층. 사이트를 모른다
 │   └── boxtable.py 괘선 아트 표 파서 (D-020)
@@ -127,3 +128,36 @@ uv run pytest tests/test_parse.py tests/test_chunk.py tests/test_boxtable.py
 
 `tests/test_chunk.py` 가 **검문소①이다** — 질문 1~7 의 정답 청크 12개가 실재하는지 단언한다.
 눈으로만 보면 다음 개정 때 아무도 다시 안 본다.
+
+## embeddings/ 산출물 (D-002, 4단계)
+
+`processed/embeddings/{key}.parquet` 3개. **DB 밖에서 만든다** — 6단계 베이크오프가 7단계 적재보다
+먼저이고 `documents.embedding` 은 한 컬럼이라 모델을 섞을 수 없다.
+
+```bash
+uv run python -m rag embed --guard-only      # 토큰 가드만 (가중치 로드 없음, 빠르다)
+uv run python -m rag embed                   # 청크가 바뀐 것만
+uv run python -m rag embed --model bge-m3 --force
+```
+
+| key | repo | 입력 한계 | 프롬프트 | 디스크 |
+|---|---|---:|---|---:|
+| `bge-m3` | `BAAI/bge-m3` | 8,192 | 없음 | 6.5 GB |
+| `kure-v1` | `nlpai-lab/KURE-v1` | 8,192 | 없음 | 2.2 GB |
+| `qwen3-embedding-0.6b` | `Qwen/Qwen3-Embedding-0.6B` | 32,768 | **query 에만 지시문** | 1.2 GB |
+
+- **청크 한 벌을 세 모델이 공유한다.** D-021 ② 가 문자 기준으로 자른 이유다 — 어느 토크나이저로
+  자르면 그 모델에 맞춰진 청크가 되어 3파전이 오염된다
+- **각 모델의 공식 프롬프트를 그대로 쓴다.** Qwen3 만 비대칭이라(문서는 프롬프트 없이, 질의에만
+  지시문) `encode_docs` 와 `encode_query` 를 나눠 뒀다. **6단계가 `encode_query` 를 쓴다** —
+  이 경로가 없으면 Qwen3 를 자기 설계와 다르게 쓰면서 점수를 매기게 된다
+- **토큰은 가드다.** 한계를 넘으면 조용히 잘리게 두지 않고 실패시킨다 (D-004 기준④가 집행되는 자리).
+  실측 최대 2,026 토큰 / 한계 8,192 (25%) — bge-m3 와 KURE 는 토큰 수까지 같다
+- **L2 정규화해서 저장**한다. 세 모델 모두 공식 지표가 cosine 이라 내적 = 코사인이 되고,
+  6·7·8단계 세 곳에서 정규화 코드가 반복되지 않는다. fp32 로 계산한다 — 3파전 점수 차이를
+  정밀도 차이로 오염시키지 않는다
+- `content` 는 넣지 않는다. 세 파일에 3번 복제되고, 6단계는 `chunk_id` 로 chunks 에서 조회한다.
+  모델 정식 식별자는 **파일 메타데이터**에 있다 (`documents.metadata.embedding_model` 로 갈 값)
+
+**테스트가 나뉘어 있다** — 기본 실행에는 가중치를 로드하는 테스트가 없다(`bge-m3` 하나가 6.5GB).
+계약·가드는 `uv run pytest`, 실제 인코딩은 `uv run pytest -m slow`.

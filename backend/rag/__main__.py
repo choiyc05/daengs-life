@@ -18,7 +18,7 @@ import sys
 import traceback
 
 from . import chunk as chunker
-from . import config, io, registry
+from . import config, embed, io, registry
 from .ir import Document
 
 # 윈도우 콘솔 기본 인코딩(cp949)으로는 한글이 깨지고 일부 기호는 예외를 낸다 (crawler CLI 와 같은 처리).
@@ -179,6 +179,70 @@ def cmd_chunk(args: argparse.Namespace) -> int:
     return 1 if n_failed else 0
 
 
+def cmd_embed(args: argparse.Namespace) -> int:
+    """chunks → embeddings/{key}.parquet. 모델 3종을 나란히 만든다 (D-002).
+
+    **가드를 먼저 전부 돌린다.** 토크나이저는 가볍고 가중치 로드는 무거우니, 실패할 것이면
+    6.5GB 를 올리기 전에 실패하는 편이 싸다.
+    """
+    rows = embed.load_chunks()
+    if not rows:
+        print("chunks 가 비었다 — `python -m rag chunk` 먼저")
+        return 1
+    keys = [args.model] if args.model else list(embed.MODELS)
+    unknown = [k for k in keys if k not in embed.MODELS]
+    if unknown:
+        print(f"모르는 모델: {unknown}   가능: {list(embed.MODELS)}")
+        return 1
+
+    fingerprint = embed.chunks_fingerprint()
+    texts = [r["content"] for r in rows]
+    print(f"청크 {len(rows)}건  chunks_sha256 {fingerprint[:16]}")
+
+    todo: list[tuple[str, dict[str, int]]] = []
+    for key in keys:
+        model = embed.MODELS[key]
+        if embed.is_current(key, fingerprint) and not args.force:
+            print(f"  {'same':11s} {key}")
+            continue
+        try:
+            stats = embed.guard(model, texts)
+        except Exception as exc:
+            print(f"  {'GUARD FAIL':11s} {key}\n      {exc}")
+            return 1
+        pct = stats["max"] / model.max_tokens * 100
+        print(f"  {'guard ok':11s} {key:22s} 최대 {stats['max']:5d} / 한계 {model.max_tokens} "
+              f"({pct:.0f}%)  중앙 {stats['median']}  p95 {stats['p95']}")
+        todo.append((key, stats))
+
+    if args.guard_only:
+        print("\n(guard-only: 인코딩하지 않음)")
+        return 0
+
+    for key, stats in todo:
+        model = embed.MODELS[key]
+        print(f"  {'encoding':11s} {key} ({model.repo}) …", flush=True)
+        st = embed.load_model(model)
+        try:
+            vectors = embed.encode_docs(model, texts, batch_size=args.batch,
+                                        st=st, progress=not args.quiet)
+        finally:
+            # **모델마다 GPU 에서 내린다.** PyTorch 는 파이썬 객체가 사라져도 empty_cache 전까지
+            # VRAM 을 붙들고 있어, 3종을 한 프로세스에서 돌리면 누적된다. 6GB GPU 에서 마지막
+            # 모델이 남은 공간에 끼여 10배 넘게 느려지는 것을 실측으로 겪었다
+            del st
+            embed.release()
+        if args.dry_run:
+            print(f"  {'(dry-run)':11s} {key:22s} {vectors.shape}")
+            continue
+        path = embed.write_parquet(model, rows, vectors,
+                                   fingerprint=fingerprint, token_stats=stats)
+        size = path.stat().st_size / 1e6
+        print(f"  {'written':11s} {key:22s} {vectors.shape}  {size:.1f} MB  "
+              f"VRAM {embed.vram_used_mb():.0f} MB  -> {path.name}", flush=True)
+    return 0
+
+
 def cmd_show(args: argparse.Namespace) -> int:
     """검문소① 용. chunk_id 조각으로 찾아 청크 본문을 그대로 출력한다."""
     hit = 0
@@ -230,6 +294,16 @@ def main(argv: list[str] | None = None) -> int:
     shw.add_argument("--limit", type=int, default=5)
     shw.add_argument("--full", action="store_true", help="본문을 자르지 않고 전부")
     shw.set_defaults(fn=cmd_show)
+
+    emb = sub.add_parser("embed", help="processed/chunks → processed/embeddings (모델 3종)")
+    emb.add_argument("--model", help=f"하나만: {list(embed.MODELS)}")
+    emb.add_argument("--batch", type=int, default=8)
+    emb.add_argument("--force", action="store_true", help="청크가 그대로여도 다시")
+    emb.add_argument("--guard-only", action="store_true",
+                     help="토큰 가드만 돌리고 인코딩은 하지 않는다 (가중치 로드 없음)")
+    emb.add_argument("--dry-run", action="store_true", help="인코딩은 하고 쓰지는 않는다")
+    emb.add_argument("--quiet", action="store_true", help="진행 막대를 끈다")
+    emb.set_defaults(fn=cmd_embed)
 
     args = p.parse_args(argv)
     return args.fn(args)
