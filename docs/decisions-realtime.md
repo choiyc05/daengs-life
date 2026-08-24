@@ -82,6 +82,12 @@ D-018 이 `backend/realtime/` 을 "파트② 엔진 (미착수)"로 자리만 �
 | 위 층 | `parsers/` **사이트** 층 (소스 1 = 모듈 1) | `providers/` **소스** 층 (API 1 = 모듈 1) |
 | 위로 나가는 계약 | 공통 IR 6종 (`ir.py`) | 공통 관측 모델 (②) |
 
+> **경로 정정 (2026-08-24, `feat/rag` 대조)** — 위 표의 `extract/`·`parsers/`·`ir.py` 는 D-018 당시의
+> `rag/` 최상위 경로다. **D-023** 이 그 뒤 `rag/` 를 `core/`(순서 없음) + `stages/`(순서 있음) +
+> `pipeline.py` 로 재배치해서 지금은 `rag/stages/parse/extract/` · `.../parsers/` · `rag/core/ir.py` 다.
+> **유추는 그대로 유효하다** — D-023 이 "D-018 의 3층 자체는 그대로이고 위치만 parse 단계 안으로"라고
+> 명시했다. 층의 순서도 역할도 안 바뀌었다.
+
 ```
 backend/realtime/
 ├── __main__.py       CLI — crawler·rag 와 같은 방식 (D-001 원칙 1)
@@ -111,6 +117,33 @@ backend/realtime/
 
 **기각 — 기관 축 단독**: 관찰 1. 기상청이 두 전송 계약에 걸쳐 있어 경계가 실제 차이와 어긋난다.
 **기각 — 데이터 축 단독**: 관찰 2. 봉투 처리가 5중복되고, 그 5개가 따로 늙는다.
+**기각 — `core/` 를 두는 것**: 아래 ①-3.
+
+### ①-3 `realtime/` 에는 `core/` 를 두지 않는다 — ✅ 확정 (2026-08-24)
+
+**왜 물어야 했나** — `crawler/` 도 `rag/`(D-023 이후) 도 `core/` 가 있다. realtime 만 없으면
+"셋 중 하나만 다른" 모양이 되고, 특히 `observation.py` 는 ②가 **provider 와 룰 사이의 계약**이라고
+못박은 것이라 `rag` 에서 정확히 같은 역할을 하는 `ir.py` 가 `core/` 에 있다는 점이 걸린다.
+
+**그런데 D-023 자신의 기준을 적용하면 두지 않는 쪽이 나온다.** `core/` 가 생긴 이유는 "**N 개가
+공유하는 것**을 한자리에"였다 — 단계 7개가 `config`·`io`·`ir` 을 공유하고, crawler 는 소스 6개가
+`core/` 5개를 공유한다.
+
+realtime 에서 그 N 은 `providers/` 7개인데, **걔들이 공유하는 것은 이미 `transport/` 다.** 위 대조표가
+그렇게 말하고 있다 — 아래 층 / 위 층. 즉 realtime 에서 `core/` 가 설 자리는 `transport/` 가 이미
+차지했고, 하나 더 만들면 층이 겹친다.
+
+남는 최상위 5개도 묶을 대상이 아니다. **"모두가 쓴다"가 아니라 각자 서로 다른 둘을 잇는다** —
+`observation` 은 providers↔rules, `geo` 는 providers↔app, `cache` 는 transport 를 감싼다.
+묶으면 `rules`·`cache` 만 폴더 밖에 남고, D-023 이 고치려던 바로 그 **"왜 얘는 폴더고 얜 파일인가"**
+가 재현된다.
+
+**`stages/` 는 애초에 이식 대상이 아니다.** realtime 은 파이프라인이 아니라 **요청 시점 엔진**이다.
+단계별 산출물도, 단계별 CLI 서브커맨드도, "지금 어디까지 됐나"도 없다. `pipeline.py` 가 답할 질문이
+realtime 에는 존재하지 않는다.
+
+**재개 조건** — 최상위 파일이 늘어 분류가 필요해지면 그때 다시 본다. 지금 예상되는 증가는
+`rules.py` 옆의 임계 설정 파일(③-d)과 `observation.py` 분할 정도라 기준을 넘지 않는다.
 
 > **정정 (2026-08-24, 실측)** — 위 표는 API허브를 "텍스트/CSV" 한 줄로 적었다. 실제로는 **두 계열**이다:
 > `typ01/url/*.php` 는 텍스트/CSV, `typ02/openApi/<서비스>/<오퍼레이션>` 은 data.go.kr 과 **같은
@@ -139,10 +172,36 @@ backend/realtime/
 그 반대 방향을 아예 보지 않는다. 둘을 추가한다:
 
 1. `FORBIDDEN` 에 `realtime` 추가 — `crawler` 가 `realtime` 을 import 하지 못하게 (기존 가드의 확장)
-2. **새 테스트** — `rag/` 와 `realtime/` 이 `crawler` 를 import 할 때 **`crawler.core.config` 외의
-   경로면 실패**. 지금 `rag` 가 이미 그 규칙을 지키고 있어 추가 즉시 통과한다(회귀 방지용으로 붙는다)
+2. **새 테스트** — `rag/` 와 `realtime/` 이 `crawler` 를 import 할 때 **허용 목록 밖이면 실패**.
+   허용 목록은 **패키지마다 다르다** (아래 ①-2 정정)
 
-의존 방향은 여전히 한쪽이다: **app → (rag | realtime) → `crawler.core.config`**
+의존 방향은 여전히 한쪽이다: **app → (rag | realtime) → `crawler.core.*`(좁은 허용 목록)**
+
+> **정정 (2026-08-24, `feat/rag` 대조)** — 위 2 는 원래 "`crawler.core.config` **외의 경로면 실패**.
+> 지금 `rag` 가 이미 그 규칙을 지키고 있어 추가 즉시 통과한다"였다. **사실이 아니다.**
+>
+> ```
+> rag/stages/parse/parsers/law/easylaw_pet.py:26   from crawler.core import textutil
+> ```
+>
+> 그대로 짜면 feat/rag 머지를 기다릴 것도 없이 **이 브랜치에서 바로 실패한다** (같은 파일이
+> 옛 경로 `rag/parsers/law/` 에 이미 있다). 그리고 이건 사고가 아니라 **의도된 확장**이다 —
+> `feat/rag` 의 `rag/README.md` 가 근거를 적어 뒀다: *"`cites()` 는 허위 인용 19건을 잡아낸 규칙이
+> 들어 있어 복사하면 그 지식이 갈라진다. D-018 이 정한 `rag → crawler` 의존은 경로 탐색까지였고
+> 여기서 '한국 법령 문서 공통 텍스트 처리'까지 넓혔다"*.
+>
+> **허용 목록을 패키지별로 나눈다.** 한 줄로 뭉뚱그려 넓히면 realtime 을 좁힌 근거가 같이 사라진다.
+>
+> | 패키지 | 허용 | 근거 |
+> |---|---|---|
+> | `rag` | `crawler.core.config` · `crawler.core.textutil` | D-018 + 위 확장 |
+> | `realtime` | `crawler.core.config` **하나** | ①-2 본문 — `Fetcher`·`store`·`seed_sources` 가 들어오면 "실시간은 저장하지 않는다"(D-012)가 흐려진다 |
+>
+> `textutil` 은 **법령 텍스트 처리**라 realtime 이 쓸 일이 애초에 없다. 목록이 갈려 있어야
+> realtime 쪽에 그게 새로 들어오는 날 테스트가 잡는다.
+>
+> 가드 본체는 `crawler/` 만 훑는 지금 구조와 달리 `rglob` 로 대상 디렉터리를 훑으면 되므로
+> **D-023 의 `rag/` 재배치와 무관하게 동작한다** — 경로를 하드코딩하지 않는다.
 
 ### ② 공통 관측 모델 — 🔶 진행중 (2026-08-24, ②-a 확정)
 
@@ -1118,7 +1177,7 @@ GET /walk?lat=37.4979&lon=127.0276
 
 | | | |
 |---|---|---|
-| ① 계층 | ✅ | `transport/` 3 · `providers/` 7 · `realtime`→`crawler.core.config` (+ API허브 두 계열 정정) |
+| ① 계층 | ✅ | `transport/` 3 · `providers/` 7 · **`core/` 없음(①-3)** · `realtime`→`crawler.core.config` (+ API허브 두 계열 정정 · D-023 경로 정정) |
 | ② 공통 관측 모델 | ✅ | a 3분할 · b `Measurement` 목록 · c `valid_at`+`issued_at` · d `float\|Code\|Interval`·등급·`Q` 23 · e `Observations` |
 | ③ 산책 적합도 룰 | ✅ | a `judge(obs,t)` T+24h · b 축 3·등급 3·최악 우선 · c 체감온도 기온 분기 · d 기관 앵커 임계 |
 | ④ 신선도·캐시 | ✅ | a 조회 키 · b TTL 3분리 · c Redis 선택 · d single-flight+Beat · e 일 1,000 제약 · f `N`=10 |
@@ -1135,7 +1194,7 @@ GET /walk?lat=37.4979&lon=127.0276
 | # | 만들 것 | 근거 결정 |
 |---|---|---|
 | 1 | `backend/realtime/{__init__,__main__,config}.py` 골격 · `Settings`(키 3종 + **`%` 있으면 unquote**) | ① · §6.1 함정 1 |
-| 2 | **의존 방향 가드 2건** — `FORBIDDEN` 에 `realtime` 추가 · `rag`/`realtime` 이 `crawler.core.config` 밖을 import 하면 실패 | ①-2 |
+| 2 | **의존 방향 가드 2건** — `FORBIDDEN` 에 `realtime` 추가 · `rag`/`realtime` 이 **패키지별 허용 목록** 밖을 import 하면 실패 (`rag`=`config`+`textutil` / `realtime`=`config`) | ①-2 정정 |
 | 3 | `geo.py` — LCC 격자(**검증 완료**) · 하버사인 최근접 · 격자 일치 판정 | §6.5 · ⑤-d |
 | 4 | `transport/datagokr.py`(키 정규화·`resultCode` 분기·`05` 재시도·`numOfRows` 상한) · `kakao.py`(KakaoAK 헤더) · `kmahub.py`(**typ01 EUC-KR 텍스트 + typ02 JSON**, `{result:{status,message}}`) | ① 정정 · §6.1·§6.8 · ⑤-b |
 | 5 | `observation.py` — `Q`(23) · `Measurement` · `State` · `ResolvedLocation` · `ProviderResult` · `Observations` + 조회 헬퍼(`latest`/`at`/`series`: **출처 우선순위 → 최신 `issued_at`**) | ② 전체 · ⑤-d |
