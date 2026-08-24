@@ -35,7 +35,7 @@ D-018 이 `backend/realtime/` 을 "파트② 엔진 (미착수)"로 자리만 �
 | ③ | **산책 적합도 룰** | ✅ 확정 | 본체. ②의 필드가 고정돼야 논의가 닫힌다 |
 | ④ | **신선도·캐시** | ✅ 확정 | ③이 "무슨 입력이 꼭 필요한가"를 정해야 각 입력의 신선도 요구를 말할 수 있다 |
 | ⑤ | **부분 실패·저하 정책** | ✅ 확정 | ③④ 위에서만 닫힌다. 공공 API 는 실제로 자주 죽는다 |
-| ⑥ | **응답 계약** | ⬜ 미논의 | **일부러 마지막.** 필드는 내용에서 따라 나온다 (D-021 ⑤와 같은 이유) |
+| ⑥ | **응답 계약** | ✅ 확정 | **일부러 마지막.** 필드는 내용에서 따라 나온다 (D-021 ⑤와 같은 이유) |
 
 ### 재논의 비용
 
@@ -1038,12 +1038,128 @@ single-flight 대기 타임아웃. 셋을 구분할 이유가 없다.
 
 **⑤ 부분 실패·저하 정책 — ✅ 확정 완료 (2026-08-24).** 네 하위 결정이 모두 닫혔다.
 
-### 다음 재개 지점
+---
 
-**⑥ 응답 계약** — RT-001 의 마지막이다. 일부러 마지막에 뒀고(필드는 내용에서 따라 나온다),
-앞이 전부 확정돼 거의 기계적이다: `Verdict`(③-b) + `Observations`(②-e) + `ResolvedLocation`(②-a)을
-`app` 이 노출할 JSON 으로 옮기고, `realtime-apis.md` §0 이 요구한
-**"○○동 (측정소: △△) 기준"** 표기를 어디에 싣는지 정한다. 그 뒤 구현.
+## ⑥ 응답 계약 — ✅ 확정 (2026-08-24)
+
+### 확정 전에 실측으로 ③을 통째로 돌려 봤다
+
+오늘 단기예보 24시각에 ③-c 산식과 ③-d 임계를 그대로 적용한 결과다. **설계가 쓸모 있는 답을 낸다:**
+
+| 시각 | 기온/습도 | 체감 | 판정 |
+|---|---|---|---|
+| 15~16시 | 33℃ / 60% | 33.5 | **UNSAFE** (지배축 `heat`) |
+| 17~18시 | 32~31 / 65~70% | 32.9 → 32.3 | CAUTION |
+| **19시 ~ 익일 09시** | 29→25→28 / 75~95% | 30.7 → **28.0** → 30.4 | **GOOD** |
+| 익일 10시~ | 29↑ | 31.1↑ | CAUTION |
+
+"지금은 부적합, **19시 이후 권장**"이 규칙에서 그냥 나온다. 습도가 체감을 붙잡는 것도 보인다 —
+22시는 27℃인데 습도 90%라 체감 29.7이고, 가장 좋은 시각은 **새벽 5시(25℃/95% → 28.0)** 다.
+
+> **③-b 미세 정정** — 이 드라이런에서 `dominant` 가 `GOOD` 일 때 세 축이 전부 채워졌다.
+> "지배축"은 등급을 끌어내린 축이라는 뜻이므로 **`grade < GOOD` 일 때만 채운다.** `GOOD` 이면 빈 목록이다.
+
+### 엔드포인트 하나가 타임라인째로 준다
+
+같은 `Observations` 하나로 24시간을 전부 판정할 수 있다(위 표가 증거다). 시각마다 호출하게 만들면
+**추가 API 호출은 0인데 왕복만 24번** 는다.
+
+```jsonc
+GET /walk?lat=37.4979&lon=127.0276
+
+{
+  "location": {
+    "dong": "역삼동", "grid": [61, 125],
+    "air_station": "강남대로", "warning_zone": "서울동남권",
+    "label": "역삼동 (측정소: 강남대로) 기준"        // 서버가 만든다
+  },
+  "generated_at": "2026-08-24T14:50+09:00",
+
+  "now": {                                          // 상세 근거는 여기만
+    "at": "…14:50", "grade": "UNSAFE", "dominant": ["heat"],
+    "axes": {
+      "heat": {"grade": "UNSAFE",
+               "basis": [{"quantity": "temp_c", "value": 33.1, "source": "kma-vilage-fcst",
+                          "valid_at": "…14:00", "issued_at": "…14:00"},
+                         {"state": "폭염경보", "zone": "서울동남권", "issued_at": "…10:00"}],
+               "derived": {"feels_like_c": 33.27}},
+      "air":  {"grade": "GOOD", "basis": [{"quantity": "pm10", "value": 37, "grade": "보통", …}]},
+      "rain": {"grade": "GOOD", "basis": […]}
+    },
+    "unknown_axes": [], "stale_axes": []
+  },
+
+  "timeline": [                                     // T+0 ~ T+24h, 1시간 간격. 가볍게
+    {"at": "…15:00", "grade": "UNSAFE", "dominant": ["heat"]},
+    {"at": "…19:00", "grade": "GOOD",   "dominant": []}, …
+  ],
+  "windows": [{"from": "…19:00", "to": "…+1 09:00", "grade": "GOOD"}],
+
+  "sources": [                                      // ②-e ProviderResult 그대로
+    {"provider": "airkorea-realtime", "ok": true,  "issued_at": "…14:00", "stale": false},
+    {"provider": "kma-life-index",    "ok": false, "reason": "not_subscribed"}
+  ],
+  "notes": ["대기질 미래 구간은 서울 권역 일 예보 기준"]
+}
+```
+
+| 결정 | 근거 |
+|---|---|
+| **엔드포인트 1개** (`/walk`) | 위. `now` 만 필요하면 `timeline` 을 무시하면 된다 |
+| **`now` 만 상세 `basis`** | 타임라인 25개에 근거를 전부 실으면 응답이 몇 배가 된다. 필요하면 `?verbose=1` |
+| **`grade` 는 문자열**, 판정 불가는 `"unknown"` | `null` 은 "필드 없음"과 헷갈린다 |
+| **`label` 을 서버가 만든다** | `realtime-apis.md` §0 의 "○○동 (측정소: △△) 기준" 정직 표기는 **보장돼야 하는 것**이라 클라이언트에 맡기지 않는다 |
+| **`sources` 노출** | 저하된 이유를 사용자가 볼 수 있어야 한다. ②-e 를 만든 이유다 |
+| **`windows`** | 이 응답의 실제 가치. ③-a 를 시각의 함수로 만든 이유가 여기서 회수된다 |
+
+---
+
+# RT-001 — ✅ 확정 완료 (2026-08-24). 하위 결정 18개
+
+| | | |
+|---|---|---|
+| ① 계층 | ✅ | `transport/` 3 · `providers/` 7 · `realtime`→`crawler.core.config` (+ API허브 두 계열 정정) |
+| ② 공통 관측 모델 | ✅ | a 3분할 · b `Measurement` 목록 · c `valid_at`+`issued_at` · d `float\|Code\|Interval`·등급·`Q` 23 · e `Observations` |
+| ③ 산책 적합도 룰 | ✅ | a `judge(obs,t)` T+24h · b 축 3·등급 3·최악 우선 · c 체감온도 기온 분기 · d 기관 앵커 임계 |
+| ④ 신선도·캐시 | ✅ | a 조회 키 · b TTL 3분리 · c Redis 선택 · d single-flight+Beat · e 일 1,000 제약 · f `N`=10 |
+| ⑤ 부분 실패·저하 | ✅ | a 격자만 필수·상한 `CAUTION` · b 예산 안 재시도 · c stale=주기 단위 · d 출처 우선순위 |
+| ⑥ 응답 계약 | ✅ | `/walk` 하나가 `now`+`timeline`+`windows`+`sources` |
+
+**전부 실측 위에서 정했다** (`realtime-apis.md` §6). 비인용 숫자는 넷뿐이고 전부 표시돼 있다 —
+체감온도 여름식 하한 `25℃`(③-c) · `HEAT` 경계 `31℃`·`0℃`(③-d) · stale 폐기 상한 `주기×3`(⑤-c).
+
+## 구현 계획
+
+순서는 의존 방향을 따른다. 각 단계 끝에 검문소가 붙는다.
+
+| # | 만들 것 | 근거 결정 |
+|---|---|---|
+| 1 | `backend/realtime/{__init__,__main__,config}.py` 골격 · `Settings`(키 3종 + **`%` 있으면 unquote**) | ① · §6.1 함정 1 |
+| 2 | **의존 방향 가드 2건** — `FORBIDDEN` 에 `realtime` 추가 · `rag`/`realtime` 이 `crawler.core.config` 밖을 import 하면 실패 | ①-2 |
+| 3 | `geo.py` — LCC 격자(**검증 완료**) · 하버사인 최근접 · 격자 일치 판정 | §6.5 · ⑤-d |
+| 4 | `transport/datagokr.py`(키 정규화·`resultCode` 분기·`05` 재시도·`numOfRows` 상한) · `kakao.py`(KakaoAK 헤더) · `kmahub.py`(**typ01 EUC-KR 텍스트 + typ02 JSON**, `{result:{status,message}}`) | ① 정정 · §6.1·§6.8 · ⑤-b |
+| 5 | `observation.py` — `Q`(23) · `Measurement` · `State` · `ResolvedLocation` · `ProviderResult` · `Observations` + 조회 헬퍼(`latest`/`at`/`series`: **출처 우선순위 → 최신 `issued_at`**) | ② 전체 · ⑤-d |
+| 6 | `providers/` 7 모듈 | ① · §6.2 |
+| 7 | `rules.py` — 체감온도 산식 · 축 3 · **임계는 설정 파일**(출처 주석 · 비인용은 `# 우리 선택`) · 최악 우선 · `dominant` 는 `grade<GOOD` 일 때만 | ③ 전체 |
+| 8 | `cache.py` — 조회 키 · TTL 3분리 · single-flight · 활성 키(`N`=10) · provider 별 일 예산 · stale | ④ · ⑤-c |
+| 9 | `app/` FastAPI `GET /walk` | ⑥ |
+
+**검문소**
+
+| | 확인할 것 |
+|---|---|
+| A | `geo` — 격자 4지점(강남 61,125 · 종로 60,127 · 해운대 99,75 · 제주 53,38) |
+| B | `providers` — **프로브가 저장한 원본 응답을 픽스처로** 넣고 실호출 없이 파싱 검증 |
+| C | **`judge()` 가 위 드라이런을 재현하는가** — 15~16시 `UNSAFE`/`heat`, 19시~익일 09시 `GOOD`, 새벽 5시가 최저 체감 |
+| D | 저하 경로 — 에어코리아를 죽였을 때 `AIR=unknown` + 전체가 `GOOD` 으로 안 올라가는지 |
+
+> 검문소 B 는 확인이 하나 필요하다 — **실시간은 저장하지 않는다**(D-012)는 원칙과 부딪히지 않는지.
+> 픽스처는 수집물이 아니라 **테스트 입력**이고 `data/` 가 아니라 `backend/tests/` 에 들어가므로
+> 별개라고 보지만, 넣기 전에 한 줄 확인하고 간다.
+
+**프로브** — `scratchpad/realtime-probe/probe.py` 는 레포에 없다. 검증된 조각들이 갈 자리는 위 표에
+이미 정해져 있다: LCC 변환 → 3번, 키 정규화·`05` 재시도 → 4번, EUC-KR 디코딩 → 4번,
+저장된 원본 응답 → 검문소 B 픽스처.
 
 **말로 정하지 않는다 — 실측을 먼저 확보했다 (2026-08-24, `docs/realtime-apis.md` §6).** 키 3종을 넣고
 17회 호출해 12건을 받았고, ②의 입력이 되는 **응답 모양 5종**(격자 관측 1점 / 격자 예보 시계열 /
