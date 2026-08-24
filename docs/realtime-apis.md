@@ -1,6 +1,8 @@
 # 실시간 조회형 — 산책 날씨·대기질 API
 
 > 조사일: 2026-08-19 · README의 질문 "GPS로 실시간 조회가 어느 정도 세세한 위치까지 가능한가?"에 대한 답 포함
+>
+> **§6 는 2026-08-24 실측 로그다. §1~§5(문서만 보고 쓴 조사)와 어긋나는 곳은 §6 이 맞다.**
 > 전부 무료·자동승인 API. 크롤링 대상이 아니라 **API 직조회** (data/에 저장하지 않음, 측정소 목록 등 정적 메타만 `data/reference/`에 캐시)
 
 ## 0. 결론 먼저 — GPS 정밀도의 실질 상한
@@ -38,6 +40,9 @@ GPS (위경도, WGS84)
   - `GET https://dapi.kakao.com/v2/local/geo/transcoord.json?x={lon}&y={lat}&output_coord=TM`
 - 위경도→격자(nx,ny) 변환: Lambert Conformal Conic 공식 — 단기예보 API 활용가이드 문서에 변환 코드 포함, 파이썬 구현도 널려 있음. `data/reference/`에 변환 모듈/표 보관
 - 측정소 목록은 이전·증설이 있으므로 월 1회 갱신 권장
+- ⚠️ **정정(§6.5)** — `transcoord` → `getNearbyMsrstnList` 체인은 **필수가 아니다.** 측정소 목록 응답에
+  위경도(`dmX`=위도, `dmY`=경도)가 실려 오므로 캐시 + 하버사인으로 최근접 측정소를 직접 고를 수 있다.
+  카카오는 "○○동" 표기라는 UX 역할만 남는다
 
 ## 2. API 상세
 
@@ -54,6 +59,7 @@ GPS (위경도, WGS84)
 
 ### 2.3 기상청 생활기상지수 조회서비스 3.0 [확인]
 - https://www.data.go.kr/data/15085288/openapi.do — 자외선지수·대기정체지수 (연중)
+- ⚠️ **정정(§6.4)** — 이 경로로는 호출되지 않는다. 실제 엔드포인트는 **API허브 `typ02/openApi/LivingWthrIdxServiceV3`** 이고 인증도 `KMA_HUB_KEY` 다. 포털 제목만 "4.0" 이다
 - **주의: "체감온도(대상·환경별)" 서비스는 2026-05-01 종료됨.** 여름 체감온도는 초단기실황의 기온·습도·풍속으로 **자체 계산** (기상청 공식 산식 공개 — 여름철: Steadman 기반, 습도 반영)
 
 ### 2.4 기상청 API허브 (선택) [확인]
@@ -73,7 +79,7 @@ GPS (위경도, WGS84)
 
 | 판단 요소 | 소스 | 필드/기준 |
 |---|---|---|
-| 기온·체감온도 | 초단기실황 | `T1H` (+`REH`,`WSD`로 체감온도 자체 계산) |
+| 기온·체감온도 | 초단기실황 | `T1H` (+`REH`,`WSD`로 체감온도 자체 계산) — ⚠️ **단기예보에서는 `TMP` 로 개명된다, §6.3** |
 | 폭염 여부 | 기상특보 | 폭염주의보/경보 발효 → 즉시 "산책 부적합" |
 | 강수 | 초단기실황/예보 | `RN1`, `PTY`(0 없음/1 비/2 진눈깨비/3 눈/4 소나기) |
 | 미세먼지 | 에어코리아 실시간 | PM2.5 등급: 좋음 0~15 / 보통 16~35 / 나쁨 36~75 / 매우나쁨 76~ ㎍/㎥ (환경부 기준). PM10: 0~30/31~80/81~150/151~ |
@@ -89,3 +95,181 @@ docs/data-sources.md §5와 동일 키 재사용: `DATA_GO_KR_KEY`(한 키로 �
 
 - 전국도시공원정보 표준데이터, 지자체별 반려견 놀이터 데이터 (data.go.kr 검색) [요확인] — "여기서 산책하세요" 추천에 활용 가능
 - 국립공원 반려동물 출입 제한(자연공원법) — 산책 장소 필터에 반영 (제도 RAG와 교차)
+
+---
+
+## 6. 실측 로그 — 2026-08-24 (키 3종 발급 후 전수 호출)
+
+§1~§5 는 문서만 읽고 쓴 조사(2026-08-19)다. RT-001 ②(공통 관측 모델)는 재논의 비용이 🔴 라
+**말로 정하지 않고 실제 응답을 받아서** 정하기로 했고, 그 결과를 여기 남긴다. 아래에서 §1~§3 과
+어긋나는 것은 **이 절이 맞다.**
+
+- 프로브: 일회성 조사 도구(scratchpad). ②가 확정되기 전이라 `backend/realtime/` 에 넣지 않았다
+- 기준 좌표: 서울 강남구 역삼동 `37.4979, 127.0276` → 격자 `(61, 125)`
+- 결과: **12/17 호출 성공.** 원본 응답은 로컬에만 있다 (실시간은 저장하지 않는다 — D-012).
+  여기 남기는 것은 **모양과 계약**이다
+
+### 6.1 전송 계약 실측 — 인증·성공봉투·실패봉투가 셋이 아니라 넷
+
+| 전송 | 인증 | 성공 응답 | 실패 응답 |
+|---|---|---|---|
+| **data.go.kr** | `serviceKey` 쿼리 (**Decoding 키**) | `response.header.resultCode="00"` + `response.body.items.item[]` | HTTP 400/403 + `OpenAPI_ServiceResponse.cmmMsgHeader.returnReasonCode` |
+| **kakao** | `Authorization: KakaoAK <REST키>` 헤더 | `documents[]` + `meta` | HTTP 403 + `{errorType, message}` |
+| **apihub `typ01/url/*.php`** | `authKey` 쿼리 | **텍스트/CSV** (`#` 주석 헤더) | HTTP 4xx + `{result:{status,message}}` **JSON** |
+| **apihub `typ02/openApi/*`** | `authKey` 쿼리 | data.go.kr 과 같은 서비스명·오퍼레이션명 체계 | 〃 |
+
+> **RT-001 ① 정정** — ①은 apihub 를 "텍스트/CSV" 한 줄로 규정했다. 실제로는 **두 계열**이고
+> (`typ01` 텍스트 · `typ02` data.go.kr 스타일), 실패 봉투는 둘 다 `{result:{status,message}}` 로
+> data.go.kr 과 또 다르다. 층 분리 결정 자체는 그대로 유효하다 — 오히려 전송 계약이 기관과
+> 일치하지 않는다는 근거가 강해졌다. `transport/kmahub.py` 가 두 계열을 다룬다.
+
+**함정 1 — Encoding / Decoding 키.** 포털이 같은 키를 두 벌로 보여준다. httpx 는 `params` 를
+자동 URL 인코딩하므로 **Decoding 형태**를 줘야 하고, Encoding 키를 그대로 주면 `%2F` → `%252F`
+이중 인코딩으로 실패한다. 판별은 확정적이다 — 키는 base64 문자열이고 그 알파벳에 `%` 가 없으므로
+**`%` 가 보이면 Encoding 키다.** 그래서 키 로딩 시 `%` 가 있으면 `unquote` 1회를 걸면 양쪽 다 받는다
+(오탐 없음). 실제로 이 레포의 `DATA_GO_KR_KEY` 는 Encoding(98자)으로 들어와 있고 Decoding 은 88자다.
+
+**함정 2 — data.go.kr 실패 코드의 의미.** 대조 실험으로 확정했다 (실존+미신청 / 실존+신청됨 /
+없는 경로를 나란히 호출):
+
+| 코드 | HTTP | 의미 | 재시도 |
+|---|---|---|---|
+| `00` | 200 | 정상 | — |
+| `05` | **200** | `SERVICETIMEOUT_ERROR` — 게이트웨이가 백엔드 연결 실패 | **가치 있음.** 1회 재시도로 복구 확인 |
+| `12` | 400 | `NO_OPENAPI_SERVICE_ERROR` — **경로가 없다** | 무의미 |
+| `30` | 403 | `SERVICE_KEY_IS_NOT_REGISTERED_ERROR` — **활용신청 안 함** | 무의미 |
+
+→ **`05` 는 HTTP 200 안에 숨어 있다.** status code 만 보면 성공으로 오인한다.
+→ RT-001 ⑤ 저하 정책의 재시도 분기는 **`05` 하나뿐**이다.
+→ `12` 와 `30` 이 갈리므로 "경로가 틀렸나 신청을 안 했나"를 코드로 구분할 수 있다.
+
+**함정 3 — 에어코리아 `numOfRows`.** 1000 으로 주면 `05` 가 잘 난다. 100 으로 낮추고 `05` 에만
+재시도하니 2/2 복구됐다.
+
+### 6.2 provider 별 실측 결과
+
+| provider | 오퍼레이션 | 결과 | 비고 |
+|---|---|---|---|
+| `kma-vilage-fcst` | `getUltraSrtNcst` · `getUltraSrtFcst` · `getVilageFcst` | ✅ 3/3 | 8·66·798건 |
+| `kma-weather-warning` | `getWthrWrnList` · `getPwnStatus` | ✅ 2/2 | |
+| `kma-life-index` | `getUVIdxV3` · `getAirDiffusionIdxV3` | ⏸ 경로 확정, **apihub 활용신청 대기** | §6.4 |
+| `kma-apihub` | `kma_sfctm2.php`(ASOS 시간) | ✅ | 텍스트/CSV 확인 |
+| | `awsh.php`(AWS) | ⏸ 403 활용신청 필요 | |
+| `airkorea-stations` | `getNearbyMsrstnList` · `getMsrstnList` | ✅ 2/2 | |
+| `airkorea-realtime` | `getMsrstnAcctoRltmMesureDnsty` · `getMinuDustFrcstDspth` | ✅ 2/2 | |
+| `kakao-local` | `coord2regioncode` · `transcoord` | ✅ 2/2 | TM `(202370.9, 443966.0)` |
+
+> **카카오 함정** — REST 키만으로는 안 된다. 앱에서 **`제품 설정 > 카카오맵` 활성화**가 꺼져 있으면
+> `403 App(...) disabled OPEN_MAP_AND_LOCAL service.` 가 난다. 반대로 **리다이렉트 URI·허용 IP·
+> 플랫폼 등록·동의항목은 전부 불필요**하다 (Local API 는 사용자 인증이 없다). 허용 IP 는 오히려
+> 비워 둬야 한다 — 개발 중 IP 가 바뀌면 원인 찾기 어려운 401 이 된다.
+
+### 6.3 응답 모양 5종 — RT-001 ②의 실제 입력
+
+②는 이 다섯을 무엇으로 정규화할지의 문제다.
+
+| | 모양 | 실물 | 제약 |
+|---|---|---|---|
+| **A** | 격자 관측 1점 | `{baseDate, baseTime, category, nx, ny, obsrValue}` | 값이 **전부 문자열**. 양의 이름이 `category` 코드 |
+| **B** | 격자 예보 시계열 | A + `{fcstDate, fcstTime, fcstValue}` | **필드가 개명된다** |
+| **C** | 특보 | `t6` = 자연어 1,610자 한 덩어리 | 구조화 상태가 아니다 |
+| **D** | 측정소 값+등급 | `pm10Value`/`Grade`/`Grade1h`/`Value24`, `khaiValue`/`Grade`, `*Flag` | **등급이 2종** |
+| **E** | 권역 등급 예보 | `informGrade` = `"서울 : 좋음,제주 : 좋음,…"` 한 문자열 | 문자열 파싱 |
+
+**A→B 개명이 두 겹이다.** 값 필드가 `obsrValue` → `fcstValue` 로 바뀌는 것에 그치지 않고,
+**기온 코드 자체가 `T1H`(실황·초단기예보) → `TMP`(단기예보)** 로 바뀐다. 조사 문서 §3 은
+"기온 = `T1H`" 한 줄로 적었는데 단기예보에서는 틀린다.
+
+| 오퍼레이션 | 값 필드 | category |
+|---|---|---|
+| `getUltraSrtNcst` | `obsrValue` | `T1H` `RN1` `REH` `WSD` `PTY` `UUU` `VEC` `VVV` (8) |
+| `getUltraSrtFcst` | `fcstValue` | 위 + `LGT` `POP` `SKY` (11) — `T1H` 유지 |
+| `getVilageFcst` | `fcstValue` | **`TMP`** `TMN` `TMX` `PCP` `SNO` `WAV` `POP` `PTY` `REH` `SKY` `WSD` `UUU` `VEC` `VVV` (14) |
+
+**C 특보는 "상태"보다 훨씬 거칠다.** `getPwnStatus` 필드는 `{other, t6, t7, tmEf, tmFc, tmSeq}` 이고
+`t6`(1,610자)에 전국 발효 현황이 한 문자열로 들어온다:
+
+```
+o 폭염경보 : 경기도(김포, 오산, …), … 서울(서울동남권, 서울동북권), 광주, 대구, 부산, 울산 …
+o 폭염주의보 : 경기도(광명, 과천, …) …
+```
+
+`getWthrWrnList` 도 `title` 에 `"[특보] 제08-290호 : 2026.08.24.10:00 / 폭염경보 변경·폭염주의보 발표"`
+로 들어온다. 구조화된 것은 `stnId`·`tmFc`·`tmSeq` 뿐이다. → 특보 provider 는 **텍스트 파싱 +
+"특보구역명 ↔ 내 행정구역" 매핑**을 져야 하고, `data/reference/` 캐시 대상이 측정소 목록 외에
+**하나 더 생긴다** (특보구역 매핑표).
+
+**D 등급이 두 벌인 이유.** 강남구 측정소 실측 — PM10 `37` 인데 `pm10Grade=1`(좋음),
+`pm10Grade1h=2`(보통), `pm10Value24=27`. 즉 **`Grade` 는 24시간 평균 기준, `Grade1h` 가 현재 기준**이다.
+산책은 지금 나가는 것이므로 **`Grade1h` 를 봐야 한다** — RT-001 ③에서 틀리기 쉬운 지점이고,
+②가 둘 다 실어야 하는 근거다. `*Flag` 는 결측·점검 사유 필드이고 정상일 때 `null`
+(이번 표본에서는 결측이 나타나지 않아 `-` 표현은 미확인).
+
+**`dataTerm=DAILY` 는 측정소 여러 곳이 아니라 한 측정소의 24시간 시계열**을 준다 (23건 전부 강남구).
+
+### 6.4 생활기상지수 — data.go.kr 이 아니라 API허브, 그리고 V3 다
+
+포털 개발계정에는 **"생활기상지수 조회서비스(4.0)"** 로 승인돼 있는데, `LivingWthrIdxServiceV4` 는
+**두 게이트웨이 어디에도 없다.** 승인 문제가 아니라는 것은 §6.2 의 코드 대조로 확정된다
+(미신청이면 `30`, 없는 경로면 `12` — 본건은 `12`).
+
+apihub 는 **404(없는 API) vs 403(있지만 미신청)** 이 갈려서 경로 존재 여부를 키 없이도 확인할 수 있다.
+그 오라클로 13개 후보를 훑은 결과:
+
+| 게이트웨이 | `LivingWthrIdxServiceV3` | `LivingWthrIdxServiceV4` |
+|---|---|---|
+| `apis.data.go.kr/1360000/` | `12` 없음 | `12` 없음 |
+| `apihub.kma.go.kr/api/typ02/openApi/` | **403 = 존재** | 404 없음 |
+
+→ **결론: `https://apihub.kma.go.kr/api/typ02/openApi/LivingWthrIdxServiceV3/getUVIdxV3`**
+(`authKey` = `KMA_HUB_KEY`, `areaNo` 10자리 행정구역코드, `time=YYYYMMDDHH`).
+`authKey` 에 data.go.kr 키를 넣으면 401 이므로 **apihub 키를 쓴다.**
+남은 일은 apihub 에서 이 자료 **활용신청** 하나다.
+
+> 부수 확인 — `typ02/openApi/VilageFcstInfoService_2.0/getUltraSrtNcst` 도 403(존재)이다. 즉 단기예보도
+> apihub 로 갈 수 있다. 다만 data.go.kr 경로가 이미 돌고 있으므로 옮길 이유는 없다.
+
+### 6.5 좌표 변환 — 검증 완료
+
+단기예보 활용가이드의 LCC 공식을 자체 구현해 기상청 격자표와 대조했다. 카카오 없이도 된다:
+
+| 지점 | 좌표 | 격자 |
+|---|---|---|
+| 서울 강남구 | 37.4979, 127.0276 | (61, 125) ✅ |
+| 서울 종로구 | 37.5729, 126.9794 | (60, 127) ✅ |
+| 부산 해운대 | 35.1631, 129.1637 | (99, 75) ✅ |
+| 제주시 | 33.4996, 126.5312 | (53, 38) ✅ |
+
+**측정소 선택도 카카오가 필수 경로가 아니다.** `getMsrstnList` 응답에 좌표가 실려 온다:
+
+```json
+{"stationName": "강남구", "dmX": "37.515336", "dmY": "127.049357", "mangName": "도시대기",
+ "item": "SO2, CO, O3, NO2, PM10, PM2.5", "addr": "서울특별시 강남구 학동로 426 …"}
+```
+
+`dmX` 가 **X 인데 위도**다 (이름과 내용이 어긋난다 — provider 층이 바로잡아야 할 실례).
+목록을 `data/reference/` 에 캐시해 두면 하버사인으로 최근접 측정소를 직접 고를 수 있으므로,
+`transcoord` → `getNearbyMsrstnList` 체인은 **대체 가능한 경로**다. RT-001 ① 의 "자체 계산이 기본,
+카카오는 동 이름 표기라는 UX 역할"이 실측으로 강화됐다.
+
+### 6.6 검증 시나리오 — 2026-08-24 14:50 실측값
+
+RT-001 ③ 산책 적합도 룰을 상상이 아니라 이 실측으로 검증한다:
+
+| 입력 | 값 | 출처 |
+|---|---|---|
+| 폭염특보 | **서울동남권 폭염경보 발효 중** (강남구 = 서울동남권) | `getPwnStatus.t6` |
+| 기온 (예보 15시) | **33℃** | `getVilageFcst` `TMP` |
+| 강수 | 없음 (`PTY=0`) | `getUltraSrtNcst` |
+| PM10 | 37 ㎍/㎥ — `Grade1h=2`(보통) / `Grade=1`(좋음, 24h) | `getMsrstnAcctoRltmMesureDnsty` |
+| PM2.5 | 29 ㎍/㎥ — `Grade1h=2`(보통) | 〃 |
+| 통합대기환경지수 | 91 (`khaiGrade=2` 보통) | 〃 |
+| 미세먼지 예보 | 서울 "좋음" | `getMinuDustFrcstDspth.informGrade` |
+
+즉 **"대기질은 보통인데 폭염경보 + 33℃"** — 대기질만 보면 나갈 만하고 열만 보면 못 나가는 케이스다.
+③의 등급 체계가 이걸 어떻게 판정하는지가 첫 시험이 된다.
+
+### 6.7 남은 작업 (사람)
+
+- [ ] apihub — **생활기상지수(`LivingWthrIdxServiceV3`) 활용신청** → §6.4 경로가 즉시 열린다
+- [ ] apihub — **AWS(`awsh.php`) 활용신청** → 분 단위 지점 관측 (선택)
