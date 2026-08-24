@@ -26,7 +26,8 @@ realtime/
 │   └── kmahub.py       authKey + typ01 EUC-KR 텍스트 · typ02 JSON
 ├── providers/        ② 소스 층 — API 서비스 하나 = 모듈 하나 (7 모듈)
 ├── geo.py            ✅ WGS84 → LCC 격자 · 하버사인 최근접 · 같은 격자 판정(⑤-d)
-├── observation.py    ★ 공통 관측 모델 = provider 와 룰 사이의 계약 (RT-001 ②)
+├── observation.py    ✅ ★ 계약 — Q(23) · Measurement · State · ResolvedLocation ·
+│                        ProviderResult · Observations + 조회 헬퍼(⑤-d → ②-c)
 ├── rules.py          산책 적합도 판정 — 축 3개, 최악 우선 (③)
 └── cache.py          신선도·TTL·single-flight (④)
 ```
