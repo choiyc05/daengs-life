@@ -19,10 +19,11 @@ GPS ──geo──▶ 조회 키(격자·측정소·행정동) ──providers�
 realtime/
 ├── __main__.py       CLI: config · geo  (walk 이 7단계에서 붙는다)
 ├── config.py         Settings 키 3종 + 경로. 키는 읽는 즉시 정규화
-├── transport/        ① 전송 층 — 인증·봉투·에러코드·재시도 (3 모듈)
-│   ├── datagokr.py     serviceKey + response.header/body.items   ← 5종이 공유
+├── transport/        ✅ ① 전송 층 — 인증·봉투·에러코드·재시도
+│   ├── base.py         예산(8초)·재시도(2회)·네트워크 오류. **봉투는 안 연다**
+│   ├── datagokr.py     serviceKey + resultCode 분기 + numOfRows≤100  ← 5종이 공유
 │   ├── kakao.py        KakaoAK 헤더 + documents[]
-│   └── kmahub.py       authKey + typ01 텍스트/CSV · typ02 JSON
+│   └── kmahub.py       authKey + typ01 EUC-KR 텍스트 · typ02 JSON
 ├── providers/        ② 소스 층 — API 서비스 하나 = 모듈 하나 (7 모듈)
 ├── geo.py            ✅ WGS84 → LCC 격자 · 하버사인 최근접 · 같은 격자 판정(⑤-d)
 ├── observation.py    ★ 공통 관측 모델 = provider 와 룰 사이의 계약 (RT-001 ②)
@@ -67,4 +68,6 @@ uv run python -m realtime geo 37.4979 127.0276   # 위경도 → 격자·대표�
 - 특보는 값도 상태도 아니라 **자연어 1,610자**다 — 특보구역명 매핑표가 `data/reference/` 에 하나 더 필요
 - 대기질 **등급이 두 벌**이다 — `Grade`(24h 평균) vs `Grade1h`(현재). 산책은 `Grade1h`
 - data.go.kr `05` 는 **HTTP 200 안에 숨어 있다.** status code 만 보면 성공으로 오인한다
+- apihub 활용신청은 **오퍼레이션 단위**다 — 같은 서비스 아래에서도 `getUVIdxV3` 만 403 이다
+- typ01 의 `help=1` 주석 헤더는 **EUC-KR** 이라 `r.text` 가 깨뜨린다 → `content.decode("euc-kr")`
 - ⚠️ **개발계정은 API 당 일 1,000회.** 단기예보가 격자 17개뿐이라 운영계정 전환이 사실상 필수 (④-e)
