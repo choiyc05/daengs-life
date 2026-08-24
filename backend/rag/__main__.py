@@ -7,6 +7,8 @@
   python -m rag chunk                                 # parsed → chunks (바뀐 것만)
   python -m rag chunk --source easylaw-pet -v
   python -m rag show <chunk_id 조각>                  # 검문소①용 — 청크를 눈으로 본다
+  python -m rag goldenset                             # 골든셋 라벨이 실재하는지 검사 (D-022)
+  python -m rag goldenset -v                          # 문항별 라벨까지 전부
 
 `embed`·`load`·`search` 서브커맨드가 4~8단계에서 같은 자리에 붙는다.
 """
@@ -18,7 +20,7 @@ import sys
 import traceback
 
 from . import chunk as chunker
-from . import config, embed, io, registry
+from . import config, embed, goldenset, io, registry
 from .ir import Document
 
 # 윈도우 콘솔 기본 인코딩(cp949)으로는 한글이 깨지고 일부 기호는 예외를 낸다 (crawler CLI 와 같은 처리).
@@ -266,6 +268,42 @@ def cmd_show(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_goldenset(args: argparse.Namespace) -> int:
+    """골든셋 라벨이 실제 청크를 가리키는지 검사한다 (D-022 ⑥).
+
+    없는 주소를 가리키는 must 는 그 문항의 Recall 을 영원히 0 으로 만들고, 증상은 6단계에서
+    "이 모델이 유독 못한다" 로만 나타난다. 채점 전에 여기서 먼저 깨뜨린다.
+    """
+    gs = goldenset.load()
+    index = goldenset.corpus_index()
+    problems, warnings = goldenset.verify(gs, index)
+
+    origin = collections.Counter(i.origin for i in gs.items)
+    print(f"골든셋 {len(gs.items)}문항 (hand {origin['hand']} · easylaw {origin['easylaw']})  "
+          f"필수 {gs.must_total}  보강 {sum(len(i.nice) for i in gs.items)}  "
+          f"분모 제외 {sum(len(i.unavailable) for i in gs.items)}")
+    print(f"코퍼스 {len(index)}청크  ·  라벨 기준 {gs.corpus.collected_on}")
+
+    if args.verbose:
+        for item in gs.items:
+            print(f"\n  [{item.id}] ({item.origin}) {item.question}")
+            for tier, addrs in (("must", item.must), ("nice", item.nice)):
+                for a in addrs:
+                    print(f"    {tier:4s} {'OK  ' if a in index else '없음 '}{a}")
+            for u in item.unavailable:
+                print(f"    ----      {u.ref}  ({u.reason})")
+
+    for w in warnings:
+        print(f"\n  경고: {w}")
+    if problems:
+        print(f"\n  라벨 {len(problems)}개가 실재하지 않는 청크를 가리킨다:")
+        for p in problems:
+            print(f"    {p.item_id:4s} {p.tier:4s} {p.address}")
+        return 1
+    print("\n  라벨 전부 실재한다")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="python -m rag")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -304,6 +342,10 @@ def main(argv: list[str] | None = None) -> int:
     emb.add_argument("--dry-run", action="store_true", help="인코딩은 하고 쓰지는 않는다")
     emb.add_argument("--quiet", action="store_true", help="진행 막대를 끈다")
     emb.set_defaults(fn=cmd_embed)
+
+    gld = sub.add_parser("goldenset", help="골든셋 라벨이 실재하는 청크인지 검사 (D-022)")
+    gld.add_argument("-v", "--verbose", action="store_true", help="문항별 라벨을 전부 출력")
+    gld.set_defaults(fn=cmd_goldenset)
 
     args = p.parse_args(argv)
     return args.fn(args)
