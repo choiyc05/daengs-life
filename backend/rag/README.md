@@ -9,10 +9,11 @@ data/raw  ──parse──▶ processed/parsed ──chunk──▶ processed/c
 
 ```
 rag/
-├── __main__.py     CLI: list / parse            ← chunk·embed·load·search 가 같은 자리에 붙는다
+├── __main__.py     CLI: list / parse / chunk / show   ← embed·load·search 가 같은 자리에 붙는다
 ├── config.py       경로. data/ 탐색은 crawler.core.config 것을 그대로 쓴다
-├── ir.py           ★ 공통 중간 표현 6종 — 모든 파서가 지켜야 할 계약
-├── io.py           parsed/ 입출력, raw_sha256 비교로 재파싱 스킵
+├── ir.py           ★ 공통 중간 표현 6종 + Chunk/ChunkSet — 계층 간 계약
+├── io.py           parsed/·chunks/ 입출력, 상류 해시 비교로 재실행 스킵
+├── chunk.py        ★ 타입 기반 단일 청커 (D-021) — 소스별 분기가 생기면 안 된다
 ├── registry.py     meta 의 source_id → 파서 모듈 (스캔하지 않고 경로를 계산)
 ├── extract/                                     ← ① 포맷 층. 사이트를 모른다
 │   └── boxtable.py 괘선 아트 표 파서 (D-020)
@@ -38,12 +39,12 @@ rag/
 
 | type | 뜻 | 현재 | D-004 청킹 규칙 |
 |---|---|---:|---|
-| `article` | 번호 붙은 조항 | 629 | <2,000자 = 1청크 / 이상 = 항 단위 |
-| `para` | 문단 | 552 | heading 밑에 모임 |
-| `table` | 표(header + rows) | 89 | 논리 행 + 헤더 3종 복제 |
-| `heading` | 제목(level) | 97 | 경계로만 사용 |
-| `aside` | 강조 박스·도식 | 27 | 독립 청크 후보 |
-| `qa` | 질문/답 쌍 | 10 | 통짜 1청크 |
+| `article` | 번호 붙은 조항 | 629 | <2,000자 = 1청크 / 이상 = 항 단위 (목까지 포함) |
+| `para` | 문단 | 552 | 부칙은 조 단위 · easylaw 는 소제목 밑에 모임 |
+| `table` | 표(header + rows) | 89 | ≤1,000자 통짜 / 초과 시 논리 행 + `헤더: 값` |
+| `heading` | 제목(level) | 97 | easylaw 는 청크 경계 + 캡션(h1 포함) · 법령 장·절은 무시 |
+| `aside` | 강조 박스·도식 | 27 | easylaw ※박스만 독립 청크(22) · 별표 유래 5건 제외 |
+| `qa` | 질문/답 쌍 | 10 | 통짜 1청크 + `관련 법령` 을 본문에 |
 
 7번째 타입은 **청킹 규칙이 기존 6종과 다를 때만** 만든다. 그 외엔 기존 타입 + 속성으로 쓴다.
 
@@ -55,7 +56,10 @@ uv run python -m rag list                        # 원본 목록 + 파서 구현
 uv run python -m rag parse                       # 바뀐 원본만 파싱
 uv run python -m rag parse --source law-drf-api -v
 uv run python -m rag parse --force               # 원본이 그대로여도 다시
-uv run pytest tests/test_parse.py tests/test_boxtable.py
+uv run python -m rag chunk                       # parsed → chunks (바뀐 것만)
+uv run python -m rag chunk --dry-run             # 쓰지 않고 집계만
+uv run python -m rag show "별표 4-2-라" --full    # 청크를 눈으로 (검문소①)
+uv run pytest tests/test_parse.py tests/test_chunk.py tests/test_boxtable.py
 ```
 
 `list` 의 표시는 셋이다 — `x` 파서 있음 / `(공백)` 파서 없음(할 일) / `-` 인덱싱 대상 아님(결정).
@@ -96,3 +100,30 @@ uv run pytest tests/test_parse.py tests/test_boxtable.py
   복사하면 그 지식이 갈라진다. D-018 이 정한 `rag → crawler` 의존은 경로 탐색까지였고 여기서
   "한국 법령 문서 공통 텍스트 처리"까지 넓혔다 (방향은 그대로 한쪽)
 - `data/` 는 git 미추적이라(D-017) 다른 PC 에는 없다. 테스트는 원본이 없으면 **실패가 아니라 skip** 이다
+
+## chunks/ 산출물 (D-021)
+
+`processed/chunks/{raw_stem}.jsonl` — **1행 = ChunkSet 헤더**(파일 수준 사실만), 2행부터 청크.
+**청크 행은 자기완결적이다** — parsed 와 반대 방향이고, 이유는 D-021 ⑤A 에 있다. 하류 세 층
+(임베더·평가·적재기)이 전부 파일 경계 없이 읽기 때문에 헤더에 두면 그 세 층이 헤더를 들고 다녀야 한다.
+
+**실측 (2026-08-24, parsed 22건 → 청크 1,407)**
+
+| 종류 | 개수 | 제외된 것 | 건수 |
+|---|---:|---|---:|
+| article | 720 | 부칙: 타법개정(제목) | 96 |
+| table | 423 | 부칙: 단문 시행일 | 71 |
+| para (부칙) | 192 | para: 소제목 밖 | 132 |
+| heading (easylaw 소제목) | 40 | 표: 헤더 전무(서식) | 9 |
+| aside (easylaw ※박스) | 22 | 부칙: 타법개정(조) | 7 |
+| qa | 10 | aside: 별표 유래 | 5 |
+
+- **제외는 항상 출력한다.** 조용한 소실이 이 프로젝트에서 두 번 문제가 됐다 (부칙 33건이
+  `content_hash` 로 합쳐지던 것, 서식이 표로 들어와 있던 것)
+- **2,000자 초과 3건은 막지 않고 경고한다** — ④ 가 폴백을 두지 않기로 했다. 하드 상한은
+  7,500자 하나뿐이고 넘으면 실패시킨다(조용히 자르지 않는다)
+- **`content` 중복 5건도 경고한다.** 합쳐지는 것 자체는 옳지만(내용이 같다) 조용한 것이 문제다.
+  계산은 7단계 적재기 몫이고 청커는 드러내기만 한다
+
+`tests/test_chunk.py` 가 **검문소①이다** — 질문 1~7 의 정답 청크 12개가 실재하는지 단언한다.
+눈으로만 보면 다음 개정 때 아무도 다시 안 본다.

@@ -4,8 +4,11 @@
   python -m rag parse                                 # 바뀐 것만 파싱
   python -m rag parse --source law-drf-api -v
   python -m rag parse --force                         # 원본이 그대로여도 다시
+  python -m rag chunk                                 # parsed → chunks (바뀐 것만)
+  python -m rag chunk --source easylaw-pet -v
+  python -m rag show <chunk_id 조각>                  # 검문소①용 — 청크를 눈으로 본다
 
-`chunk`·`embed`·`load`·`search` 서브커맨드가 3~8단계에서 같은 자리에 붙는다.
+`embed`·`load`·`search` 서브커맨드가 4~8단계에서 같은 자리에 붙는다.
 """
 from __future__ import annotations
 
@@ -14,7 +17,8 @@ import collections
 import sys
 import traceback
 
-from . import io, registry
+from . import chunk as chunker
+from . import config, io, registry
 from .ir import Document
 
 # 윈도우 콘솔 기본 인코딩(cp949)으로는 한글이 깨지고 일부 기호는 예외를 낸다 (crawler CLI 와 같은 처리).
@@ -113,6 +117,91 @@ def cmd_parse(args: argparse.Namespace) -> int:
     return 1 if n_failed else 0
 
 
+def cmd_chunk(args: argparse.Namespace) -> int:
+    """parsed → chunks. 스킵 판단·집계 모양을 `parse` 와 같게 둔다."""
+    paths = io.parsed_files()
+    n_written = n_same = n_failed = 0
+    total: collections.Counter[str] = collections.Counter()
+    dropped: collections.Counter[str] = collections.Counter()
+    warnings: list[str] = []
+    seen: dict[str, str] = {}          # content_hash → 먼저 본 chunk_id
+    dups: list[tuple[str, str]] = []
+
+    for path in paths:
+        head = io.read_header(path)
+        if args.source and (head or {}).get("source_id") != args.source:
+            continue
+        if io.is_chunk_current(path) and not args.force:
+            n_same += 1
+            if args.verbose:
+                print(f"  {'same':11s} {path.stem}")
+            continue
+        try:
+            header, res = chunker.chunk_file(path)
+        except Exception:
+            print(f"  {'FAIL':11s} {path.stem}\n{traceback.format_exc()}")
+            n_failed += 1
+            continue
+
+        total.update(c.element_type for c in res.chunks)
+        dropped.update(res.dropped)
+        warnings += res.warnings
+        for c in res.chunks:
+            h = chunker.content_hash(c.content)
+            if h in seen:
+                dups.append((seen[h], c.chunk_id))
+            else:
+                seen[h] = c.chunk_id
+
+        n_written += 1
+        if args.dry_run:
+            print(f"  {'(dry-run)':11s} {path.stem:44s} 청크 {len(res.chunks):4d}")
+        else:
+            out = io.write_chunks(header, res.chunks)
+            print(f"  {'chunked':11s} {path.stem:44s} 청크 {len(res.chunks):4d}")
+            if args.verbose:
+                print(f"              -> {out}")
+
+    print(f"\n청크 합계: {dict(sorted(total.items()))}  총 {sum(total.values())}")
+    if dropped:
+        # 무엇을 왜 뺐는지 항상 보여 준다. 조용한 소실이 이 프로젝트에서 두 번 문제가 됐다 (D-021 ①·⑤D)
+        print(f"제외:      {dict(dropped)}")
+    for w in warnings:
+        print(f"  ! {w}")
+    if dups:
+        # 합쳐지는 것 자체는 옳다(내용이 같다). 조용한 것이 문제다 — 7단계 적재기가 content_hash 로
+        # 합칠 행을 미리 드러낸다 (D-021 ⑤D)
+        print(f"  ! content 중복 {len(dups)}건 — 적재 시 content_hash 로 합쳐진다")
+        for first, later in dups:
+            print(f"      {later}  ==  {first}")
+    print(f"chunked {n_written}, same {n_same}, failed {n_failed}"
+          + ("   (dry-run: 아무것도 쓰지 않음)" if args.dry_run else ""))
+    return 1 if n_failed else 0
+
+
+def cmd_show(args: argparse.Namespace) -> int:
+    """검문소① 용. chunk_id 조각으로 찾아 청크 본문을 그대로 출력한다."""
+    hit = 0
+    for path in sorted(config.CHUNK_DIR.glob("*.jsonl")):
+        for row in io.read_chunks(path):
+            if args.pattern not in row["chunk_id"]:
+                continue
+            hit += 1
+            print(f"--- {row['chunk_id']}  ({row['chars']}자)")
+            print(f"    citation: {row.get('citation')}   section: {row.get('section')}")
+            if row.get("part"):
+                print(f"    part: {row['part']}")
+            print(row["content"] if args.full else row["content"][:600])
+            print()
+            if hit >= args.limit:
+                print(f"(상한 {args.limit}건에서 멈춤)")
+                return 0
+    if not hit:
+        print("일치하는 청크가 없다")
+        return 1
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="python -m rag")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -128,6 +217,19 @@ def main(argv: list[str] | None = None) -> int:
     par.add_argument("--dry-run", action="store_true", help="아무것도 쓰지 않고 결과만 출력")
     par.add_argument("-v", "--verbose", action="store_true")
     par.set_defaults(fn=cmd_parse)
+
+    chk = sub.add_parser("chunk", help="processed/parsed → processed/chunks")
+    chk.add_argument("--source", help="parsed 헤더의 source_id 로 거르기")
+    chk.add_argument("--force", action="store_true", help="parsed 가 그대로여도 다시 청킹")
+    chk.add_argument("--dry-run", action="store_true", help="아무것도 쓰지 않고 결과만 출력")
+    chk.add_argument("-v", "--verbose", action="store_true")
+    chk.set_defaults(fn=cmd_chunk)
+
+    shw = sub.add_parser("show", help="청크를 눈으로 본다 (검문소①)")
+    shw.add_argument("pattern", help="chunk_id 의 일부")
+    shw.add_argument("--limit", type=int, default=5)
+    shw.add_argument("--full", action="store_true", help="본문을 자르지 않고 전부")
+    shw.set_defaults(fn=cmd_show)
 
     args = p.parse_args(argv)
     return args.fn(args)

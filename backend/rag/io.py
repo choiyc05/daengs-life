@@ -9,6 +9,7 @@ parsed 헤더에 그 값을 `raw_sha256` 으로 적어 두면 다음 실행에�
 """
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import dataclass
 from datetime import datetime
@@ -99,3 +100,49 @@ def read(path: Path) -> Iterator[dict[str, Any]]:
         for line in f:
             if line.strip():
                 yield json.loads(line)
+
+
+# ---------------------------------------------------------------- 3단계: chunks/ (D-021 ⑤)
+def parsed_files() -> list[Path]:
+    config.require_data_dir()
+    return sorted(config.PARSED_DIR.glob("*.jsonl"))
+
+
+def chunk_path(doc_id: str) -> Path:
+    return config.CHUNK_DIR / f"{doc_id}.jsonl"
+
+
+def sha256_file(path: Path) -> str:
+    """parsed jsonl 한 개의 해시. 재청킹 스킵의 비교 대상이다."""
+    h = hashlib.sha256()
+    with path.open("rb") as f:
+        for block in iter(lambda: f.read(1 << 16), b""):
+            h.update(block)
+    return h.hexdigest()
+
+
+def is_chunk_current(parsed: Path) -> bool:
+    """이미 같은 parsed 로 청킹된 결과가 있는가.
+
+    parsed 쪽 `is_current()` 와 같은 모양이다 — 상태 파일을 따로 두지 않고 상류 산출물의 해시를
+    하류 헤더에 적어 비교한다 (D-001 원칙 2 를 한 단계 더 연장).
+    """
+    head = read_header(chunk_path(parsed.stem))
+    return bool(head) and head.get("parsed_sha256") == sha256_file(parsed)
+
+
+def write_chunks(header: BaseModel, chunks: list[BaseModel]) -> Path:
+    """1행 헤더 + 2행부터 청크. parsed 와 같은 파일 모양이라 `read()` 를 그대로 쓴다."""
+    path = chunk_path(header.doc_id)          # type: ignore[attr-defined]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="\n") as f:
+        for model in [header, *chunks]:
+            f.write(json.dumps(model.model_dump(exclude_none=True), ensure_ascii=False) + "\n")
+    return path
+
+
+def read_chunks(path: Path) -> Iterator[dict[str, Any]]:
+    """헤더를 건너뛰고 청크 행만. 4단계 임베더는 파일 경계를 무시하고 이것만 이어 붙인다."""
+    for row in read(path):
+        if row.get("type") == "chunk":
+            yield row
