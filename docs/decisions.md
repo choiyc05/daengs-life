@@ -1152,4 +1152,3 @@ data/raw/law/law-drf-api-...xml + .meta.json{"source_id":"law-drf-api","domain":
 - 구현 시 만들 것: `backend/rag/chunk.py`(신규) · `tests/test_chunk.py`(검문소①을 테스트로 고정) ·
   `ir.py` 에 `Chunk` 모델 · `io.py` 청크 입출력 · `__main__.py` 에 `chunk` 서브커맨드.
   `config.CHUNK_DIR` 은 이미 있다
-
