@@ -16,7 +16,7 @@ data/
 │   ├── subsidy/      # 지자체 지원사업 (공고문·조례·보조금24)
 │   └── insurance/    # 펫보험 약관
 ├── processed/        # 가공 산출물 — 단계별 분리
-│   ├── parsed/       #   텍스트 추출 (jsonl)
+│   ├── parsed/       #   구조 추출 (jsonl) — 원본 1건 = 1파일, 1행 헤더 + 요소 (D-019)
 │   ├── chunks/       #   청킹 (jsonl) — DB 적재 입력
 │   └── embeddings/   #   벡터 (parquet)
 ├── eval/             # 골든셋 (golden_v1.jsonl) — D-007. git 관리 대상
