@@ -64,7 +64,7 @@
 
 준비물: `GEMINI_API_KEY`(9단계) · `uv sync --group ml`(4단계, torch) · 모델 3종 디스크 ~6GB
 - 테스트: `cd backend && uv run pytest` (의존 방향 가드 + 설정 로딩)
-- 필요 키(**`backend/.env`**): LAW_OC ✅발급완료·설정완료 / DATA_GO_KR_KEY·KAKAO_REST_KEY 미발급 — 발급처는 docs/data-sources.md §9
+- 필요 키(**`backend/.env`**): LAW_OC ✅ / DATA_GO_KR_KEY ✅ / KAKAO_REST_KEY ✅ / KMA_HUB_KEY ✅ (2026-08-24 전부 발급) — 발급처는 docs/data-sources.md §9, 함정은 아래 파트② 절
   - env 배치는 배포 단위 기준(D-014): 루트 `.env`=인프라(compose), `backend/.env`=백엔드 런타임, `frontend/.env`=프론트
   - 읽는 순서 실제 환경변수 > `backend/.env` > 루트 `.env`. 컨테이너에선 `DAENGS_DATA_DIR` 로 data/ 위치 지정
 
