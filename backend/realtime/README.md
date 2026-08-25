@@ -24,7 +24,14 @@ realtime/
 │   ├── datagokr.py     serviceKey + resultCode 분기 + numOfRows≤100  ← 5종이 공유
 │   ├── kakao.py        KakaoAK 헤더 + documents[]
 │   └── kmahub.py       authKey + typ01 EUC-KR 텍스트 · typ02 JSON
-├── providers/        ② 소스 층 — API 서비스 하나 = 모듈 하나 (7 모듈)
+├── providers/        ✅ ② 소스 층 — API 서비스 하나 = 모듈 하나 (7 모듈)
+│   ├── kma_vilage_fcst.py   실황·초단기·단기 — `T1H`↔`TMP` 개명을 여기서 흡수
+│   ├── kma_warning.py       `t6` 자연어 1,610자에서 내 특보구역 찾기
+│   ├── kma_life_index.py    체감온도 대조표 · UV
+│   ├── kma_apihub.py        AWS 분 단위 — **같은 격자 아니면 안 만든다**(⑤-d)
+│   ├── airkorea_realtime.py 측정소 실시간(`Grade1h`) · 권역 예보(State)
+│   ├── airkorea_stations.py 조회 키를 만드는 provider
+│   └── kakao_local.py       표기 전용 — 실패해도 관통된다
 ├── geo.py            ✅ WGS84 → LCC 격자 · 하버사인 최근접 · 같은 격자 판정(⑤-d)
 ├── observation.py    ✅ ★ 계약 — Q(23) · Measurement · State · ResolvedLocation ·
 │                        ProviderResult · Observations + 조회 헬퍼(⑤-d → ②-c)

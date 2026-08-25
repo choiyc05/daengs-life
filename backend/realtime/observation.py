@@ -196,6 +196,11 @@ class Measurement:
     grade: int | None = None         # API 가 준 것만. 없으면 None — 결함이 아니다 (②-d-2)
 
     def __post_init__(self) -> None:
+        # **시간대를 요구한다.** 실측 시각은 전부 KST 인데 naive 로 두면 aware 값과 섞이는 순간
+        # `bisect` 안쪽에서 TypeError 가 난다 — 원인이 provider 라는 것을 잃는 자리다.
+        # ②-c 가 시각을 판정의 축으로 삼았으므로 여기서 못 박는 값이 맞다.
+        if self.valid_at.tzinfo is None or self.issued_at.tzinfo is None:
+            raise ValueError(f"{self.quantity.name}: valid_at·issued_at 은 시간대를 가져야 한다 (KST)")
         expected = REPRESENTATION[self.quantity]
         if not isinstance(self.value, expected):
             # 경계에서 터뜨린다. 룰까지 흘러가면 원인이 provider 라는 것을 잃는다.
@@ -246,6 +251,10 @@ class State:
     issued_at: datetime
     source: Source
     detail: str = ""                 # 원문 조각. 번역이 틀렸을 때 확인할 자리
+
+    def __post_init__(self) -> None:
+        if self.valid_from.tzinfo is None or self.issued_at.tzinfo is None:
+            raise ValueError(f"{self.kind.name}: 시각은 시간대를 가져야 한다 (KST)")
 
     def covers(self, t: datetime) -> bool:
         return self.valid_from <= t and (self.valid_to is None or t < self.valid_to)

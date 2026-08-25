@@ -11,6 +11,7 @@ from datetime import datetime
 
 import pytest
 
+from realtime.config import KST
 from realtime.geo import Grid, LatLon
 from realtime.observation import (
     GRADED, REPRESENTATION, SOURCE_PRIORITY, UNVERIFIED, Code, Interval, Measurement,
@@ -18,10 +19,11 @@ from realtime.observation import (
     parse_interval, parse_precip_kind, parse_sky,
 )
 
-D = datetime(2026, 8, 24)
+D = datetime(2026, 8, 24, tzinfo=KST)
 
 
 def t(hour: int, minute: int = 0) -> datetime:
+    """전부 KST aware 다 — `Measurement` 가 naive 를 거부한다."""
     return D.replace(hour=hour, minute=minute)
 
 
@@ -83,6 +85,13 @@ def test_precip_must_be_an_interval_even_when_the_api_sends_a_number() -> None:
     ok = Measurement(Q.PRECIP_MM, Interval("0", 0.0, 0.0), valid_at=t(14), issued_at=t(14),
                      source=Source.NCST, spatial_ref="격자 61,125")
     assert ok.value.is_zero
+
+
+def test_naive_times_are_rejected() -> None:
+    """naive 와 aware 가 섞이면 조회 헬퍼 안쪽에서 TypeError 가 난다 — 경계에서 막는다."""
+    with pytest.raises(ValueError, match="시간대"):
+        Measurement(Q.TEMP, 28.3, valid_at=datetime(2026, 8, 25, 9), issued_at=t(9),
+                    source=Source.NCST, spatial_ref="격자 61,125")
 
 
 def test_a_grade_on_a_quantity_that_has_none_is_rejected() -> None:
