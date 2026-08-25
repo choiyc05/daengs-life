@@ -35,7 +35,8 @@ realtime/
 ├── geo.py            ✅ WGS84 → LCC 격자 · 하버사인 최근접 · 같은 격자 판정(⑤-d)
 ├── observation.py    ✅ ★ 계약 — Q(23) · Measurement · State · ResolvedLocation ·
 │                        ProviderResult · Observations + 조회 헬퍼(⑤-d → ②-c)
-├── rules.py          산책 적합도 판정 — 축 3개, 최악 우선 (③)
+├── rules.py          ✅ 판정 — 축 3개 · 최악 우선 · ⑤-a 상한 · 타임라인/권장구간
+├── thresholds.yaml   ✅ 임계 — **값마다 출처.** 비인용 넷은 `우리 선택` 으로 표시
 └── cache.py          신선도·TTL·single-flight (④)
 ```
 
