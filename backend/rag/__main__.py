@@ -14,8 +14,11 @@
   python -m rag load                                  # 7단계 documents 적재 (D-025)
   python -m rag load --dry-run                        # DB 를 안 건드리고 만들 행만 확인
   python -m rag load --model qwen3-embedding-0.6b     # 모델 교체 = 같은 명령 재실행
+  python -m rag search "목줄 안 하면 과태료 얼마"      # 8단계 dense 검색 (D-026)
+  python -m rag search --questions                    # 검증질문 1~7 전부 = 검문소③
+  python -m rag search --questions --no-supplementary # 부칙을 뺀 결과와 비교
 
-`search`·`generate` 서브커맨드가 8~9단계에서 같은 자리에 붙는다.
+`generate` 서브커맨드가 9단계에서 같은 자리에 붙는다.
 """
 from __future__ import annotations
 
@@ -28,6 +31,7 @@ from .core import config, io
 from .stages import chunk as chunker
 from .stages import embed, evaluate, goldenset, parse
 from .stages import load as loader
+from .stages import search as searcher
 
 # 윈도우 콘솔 기본 인코딩(cp949)으로는 한글이 깨지고 일부 기호는 예외를 낸다 (crawler CLI 와 같은 처리).
 for _stream in (sys.stdout, sys.stderr):
@@ -408,6 +412,78 @@ def cmd_load(args: argparse.Namespace) -> int:
     return 0
 
 
+def _print_hits(hits, must=frozenset(), nice=frozenset(), width: int = 150) -> None:
+    """검문소③이 눈으로 보는 화면. **`chunk_id` 를 항상 찍는다** — 골든셋 라벨과 같은 주소라
+    "이게 정답 청크인가"를 대조할 수 있다 (D-026 ②)."""
+    if not hits:
+        print("      (결과 없음)")
+        return
+    for h in hits:
+        tier = searcher.tier_of(h.chunk_id, set(must), set(nice))
+        mark = {"must": "★", "nice": "·"}.get(tier, " ")
+        sup = "  [부칙]" if h.part == "supplementary" else ""
+        print(f"  {mark} {h.rank}. {h.score:.4f}  {h.citation or h.document_title}{sup}")
+        body = " ".join(h.content.split())
+        print(f"        {body[:width]}{'…' if len(body) > width else ''}")
+        print(f"        {h.chunk_id}")
+
+
+def cmd_search(args: argparse.Namespace) -> int:
+    """8단계 dense 검색 (D-026). **검색 자체는 `stages.search` 가 하고 여기는 출력만 한다.**
+
+    D-023 이 parse 에서 정리한 모양 그대로이고, 이유는 9단계·FastAPI 가 같은 함수를 부르게
+    하기 위해서다 — 검색을 두 번 짜면 검문소③이 확인한 것과 서빙이 하는 것이 달라진다.
+    """
+    key = args.model or config.settings.embedding_model_key
+    if key not in embed.MODELS:
+        print(f"모르는 모델: {key}   가능: {list(embed.MODELS)}")
+        return 1
+    if not args.questions and not args.query:
+        print("질의를 주거나 --questions 를 쓸 것")
+        return 1
+
+    if args.questions:
+        items = searcher.hand_questions()
+    else:
+        items = [("", " ".join(args.query), set(), set())]
+
+    label = "부칙 포함" if args.supplementary else "부칙 제외"
+    print(f"모델 {key} ({embed.MODELS[key].repo})  ·  top-{args.k}  ·  {label}")
+    if key != "qwen3-embedding-0.6b":
+        print("  * 판정 승자는 qwen3-embedding-0.6b 다 — 첫 관통을 기준선으로 가는 중"
+              " (D-024 `판정 이후`)")
+
+    # 모델을 한 번만 올린다. 질의 7개마다 6.5GB 를 올렸다 내리는 것은 낭비다
+    model = embed.MODELS[key]
+    st = embed.load_model(model)
+    try:
+        vectors = [(qid, q, must, nice, embed.encode_query(model, q, st=st))
+                   for qid, q, must, nice in items]
+    finally:
+        del st
+        embed.release()
+
+    found = 0
+    with loader.connect() as conn:
+        for qid, q, must, nice, vec in vectors:
+            head = f"[{qid}] " if qid else ""
+            print(f"\n{head}{q}")
+            if must:
+                print(f"      필수 {len(must)}개: {', '.join(sorted(must))}")
+            hits = searcher.search(vec, k=args.k, conn=conn,
+                                   include_supplementary=args.supplementary,
+                                   category=args.category)
+            _print_hits(hits, must, nice, width=args.width)
+            found += sum(1 for h in hits
+                         if searcher.tier_of(h.chunk_id, must, nice) == "must")
+
+    if args.questions:
+        # 검문소③은 눈으로 보는 것이지만, 세어 두면 부칙 필터를 켜고 끄며 비교할 수 있다
+        print(f"\n★=필수 정답 · ·=보강.  top-{args.k} 안의 필수 {found}개"
+              f" / {len(items)}문항 ({label})")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="python -m rag")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -466,6 +542,19 @@ def main(argv: list[str] | None = None) -> int:
     ld.add_argument("--dry-run", action="store_true", help="DB 를 열지 않고 만들 행만 확인")
     ld.add_argument("--show", type=int, default=5, help="dry-run 에서 보여 줄 행 수")
     ld.set_defaults(fn=cmd_load)
+
+    sr = sub.add_parser("search", help="8단계 — dense 검색 (검문소③, D-026)")
+    sr.add_argument("query", nargs="*", help="질의. --questions 를 쓰면 생략")
+    sr.add_argument("--questions", action="store_true",
+                    help="검증질문 1~7 전부 (goldenset.yaml 의 origin=hand)")
+    sr.add_argument("-k", type=int, default=searcher.DEFAULT_K, help="top-k (기본 5)")
+    sr.add_argument("--model", help=f"기본 {list(embed.MODELS)[0]} (D-024 판정 이후)")
+    sr.add_argument("--category", help="policy/travel/food 로 사전 필터")
+    sr.add_argument("--width", type=int, default=150, help="본문 발췌 길이")
+    sr.add_argument("--no-supplementary", dest="supplementary", action="store_false",
+                    help="부칙(시행일·경과조치)을 뺀다. **기본은 포함**이다 — 검문소③은"
+                         " 걸러지지 않은 것을 봐야 한다 (D-026 ①)")
+    sr.set_defaults(fn=cmd_search, supplementary=True)
 
     args = p.parse_args(argv)
     return args.fn(args)
