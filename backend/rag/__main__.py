@@ -17,8 +17,9 @@
   python -m rag search "목줄 안 하면 과태료 얼마"      # 8단계 dense 검색 (D-026)
   python -m rag search --questions                    # 검증질문 1~7 전부 = 검문소③
   python -m rag search --questions --no-supplementary # 부칙을 뺀 결과와 비교
-
-`generate` 서브커맨드가 9단계에서 같은 자리에 붙는다.
+  python -m rag generate "목줄 안 하면 과태료 얼마"    # 9단계 검색+Gemini (D-028)
+  python -m rag generate --questions                  # 검증질문 1~7 전부 = **검문소④** + 1랩 덤프
+  python -m rag generate --questions --dry-run        # 덤프를 쓰지 않는다
 """
 from __future__ import annotations
 
@@ -29,7 +30,7 @@ import traceback
 
 from .core import config, io
 from .stages import chunk as chunker
-from .stages import embed, evaluate, goldenset, parse
+from .stages import embed, evaluate, generate as generator, goldenset, parse
 from .stages import load as loader
 from .stages import search as searcher
 
@@ -484,6 +485,86 @@ def cmd_search(args: argparse.Namespace) -> int:
     return 0
 
 
+
+def cmd_generate(args: argparse.Namespace) -> int:
+    """9단계 — 검색 위에 Gemini 로 답을 만든다 (D-028). **조립은 `stages.generate` 가 하고
+    여기는 출력과 덤프만 한다** (D-023 이 parse 에서 정리한 모양 그대로).
+
+    `--questions` 가 **검문소④**다. 판정 문항을 사후에 만들지 않으려고 미리 못 박아 뒀다
+    (D-024 ①의 사전 등록과 같은 장치) — **답변에 등장한 조항 번호 중 컨텍스트에 실재하지 않는
+    것의 개수.** 0이면 프롬프트로 충분하고, 1 이상이면 구조로 막아야 한다(D-029).
+    """
+    key = args.model or config.settings.embedding_model_key
+    if key not in embed.MODELS:
+        print(f"모르는 모델: {key}   가능: {list(embed.MODELS)}")
+        return 1
+    if not args.questions and not args.query:
+        print("질의를 주거나 --questions 를 쓸 것")
+        return 1
+
+    items = searcher.hand_questions() if args.questions else [("", " ".join(args.query), set(), set())]
+    print(f"임베딩 {key}  ·  Gemini {config.settings.gemini_model}  ·  top-{args.k}")
+
+    # 모델·커넥션·클라이언트를 **여기서 만들어 넘긴다** — D-028 ①의 수명 규약이다. 질의 7개마다
+    # 6.5GB 를 올렸다 내릴 이유가 없고, 서버에서는 같은 자리에 lifespan 이 올린 것이 들어온다.
+    try:
+        client = generator._client()
+    except RuntimeError as e:
+        print(f"  {e}")
+        return 1
+
+    model = embed.MODELS[key]
+    st = embed.load_model(model)
+    answers: list[tuple[str, generator.Answer, set, set]] = []
+    try:
+        with loader.connect() as conn:
+            for qid, q, must, nice in items:
+                a = generator.ask(q, k=args.k, include_supplementary=args.supplementary,
+                                  category=args.category, model_key=key,
+                                  st=st, conn=conn, client=client)
+                answers.append((qid or "-", a, must, nice))
+
+                print()
+                print("=" * 70)
+                print(f"{('[' + qid + '] ') if qid else ''}{q}")
+                print()
+                print(a.text)
+                print()
+                print(f"  근거 top-{args.k}:")
+                _print_hits(a.hits, must, nice, width=args.width)
+                print()
+                if not a.cited:
+                    print("  인용한 조항: (없음)")
+                else:
+                    print(f"  인용한 조항: {', '.join(a.cited)}")
+                    if a.ungrounded:
+                        print(f"  ⚠️ 컨텍스트에 없음: {', '.join(a.ungrounded)}")
+                    else:
+                        print("  근거 안에 전부 있음")
+
+            if not args.dry_run:
+                header = generator.dump_header(args.lap, answers, args.k, conn=conn)
+                path = io.write_answers(header, generator.dump_rows(answers), stem=args.lap)
+                print()
+                print(f"덤프 → {path}")
+    finally:
+        del st
+        embed.release()
+
+    if args.questions:
+        # 검문소④는 **문항 수로 센다.** D-024 ③ 이 Hit 을 문항 균등으로 읽은 것과 같은 이유다 —
+        # 조항을 많이 인용한 문항 하나가 점수를 지배하면 안 된다. 조항 총수는 참고로만 찍는다.
+        bad = sum(1 for _, a, _, _ in answers if a.ungrounded)
+        total = sum(len(a.ungrounded) for _, a, _, _ in answers)
+        cited = sum(1 for _, a, _, _ in answers if a.cited)
+        print()
+        print("=" * 70)
+        print(f"검문소④  조항을 인용한 문항 {cited}/{len(answers)}  ·  "
+              f"컨텍스트에 없는 조항을 든 문항 {bad}/{len(answers)} (조항 수 {total})")
+        print("  0 이면 프롬프트로 충분하고, 1 이상이면 구조로 막아야 한다 (D-029)")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="python -m rag")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -554,6 +635,20 @@ def main(argv: list[str] | None = None) -> int:
     sr.add_argument("--no-supplementary", dest="supplementary", action="store_false",
                     help="부칙(시행일·경과조치)을 뺀다. **기본은 포함**이다 — 검문소③은"
                          " 걸러지지 않은 것을 봐야 한다 (D-026 ①)")
+
+    gen = sub.add_parser("generate", help="9단계 — 검색 + Gemini 답변 (검문소④, D-028)")
+    gen.add_argument("query", nargs="*", help="질의. --questions 를 쓰면 생략")
+    gen.add_argument("--questions", action="store_true",
+                     help="검증질문 1~7 전부 = 검문소④ (goldenset.yaml 의 origin=hand)")
+    gen.add_argument("-k", type=int, default=searcher.DEFAULT_K, help="컨텍스트에 넣을 top-k (기본 5)")
+    gen.add_argument("--model", help=f"임베딩 모델. 기본 {list(embed.MODELS)[0]} (D-024 판정 이후)")
+    gen.add_argument("--category", help="policy/travel/food 로 사전 필터")
+    gen.add_argument("--width", type=int, default=150, help="근거 발췌 길이 (답변 본문은 안 자른다)")
+    gen.add_argument("--lap", default="lap1", help="덤프 파일명. 2랩은 lap2 (D-028 ⑥)")
+    gen.add_argument("--no-supplementary", dest="supplementary", action="store_false",
+                     help="부칙을 뺀다. 기본은 포함 — 서빙 기본값은 app/services 가 갖는다 (D-026 ①)")
+    gen.add_argument("--dry-run", action="store_true", help="덤프를 쓰지 않는다")
+    gen.set_defaults(fn=cmd_generate)
     sr.set_defaults(fn=cmd_search, supplementary=True)
 
     args = p.parse_args(argv)

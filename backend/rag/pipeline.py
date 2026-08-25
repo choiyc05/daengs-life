@@ -43,11 +43,10 @@ STAGES: list[Stage] = [
           consumes="processed/embeddings/", produces="postgres documents", adr="D-008·D-025"),
     Stage("search", 8, "dense 검색 (검문소③)",
           consumes="postgres documents", produces="stdout", adr="D-026"),
-    # 아래는 아직 없다. 붙는 순서를 여기서 먼저 고정해 둔다 —
-    # D-003 이 확정되면 search 와 generate 사이에 한 줄이 는다. 파일명은 안 바뀐다.
-
-
-    # Stage("generate",  9, "Gemini 답변 생성", ...),
+    # D-003 이 확정되면 search 와 generate 사이에 한 줄이 는다. 파일명은 안 바뀐다 —
+    # 그때 고칠 곳이 하나여야 해서 조립 순서를 `generate.ask()` 가 소유한다 (D-028 ③).
+    Stage("generate", 9, "검색 위에 Gemini 로 답 생성 (검문소④)",
+          consumes="postgres documents", produces="processed/answers/", adr="D-028"),
 ]
 
 BY_KEY: dict[str, Stage] = {s.key: s for s in STAGES}

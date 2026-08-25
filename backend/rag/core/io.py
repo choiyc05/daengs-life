@@ -165,6 +165,27 @@ def write_eval(header: BaseModel, items: list[BaseModel]) -> Path:
     return path
 
 
+
+# ---------------------------------------------------------------- 9단계: answers/ (D-028 ⑥)
+def answer_path(stem: str = "lap1") -> Path:
+    """1랩 덤프. 랩 이름이 파일명이다 — 2랩은 `lap2` 로 나란히 놓여 **대조가 파일 두 개 여는 일**이 된다."""
+    return config.ANSWER_DIR / f"{stem}.jsonl"
+
+
+def write_answers(header: BaseModel, items: list[BaseModel], stem: str = "lap1") -> Path:
+    """`write_eval` 과 같은 파일 모양(1행 헤더 + 문항). 다른 함수인 것은 경로와 헤더 타입뿐이다.
+
+    **여기 쓰는 것도 판단이 아니라 물증이다** (D-024 ④ 와 같은 규약). 1랩 요약 — 코퍼스 스냅샷 ·
+    검문소④ 수치 · 문항별 한 줄 — 은 이 파일이 아니라 D-028 ⑥ 으로 간다. 이 덤프는 미추적이라
+    **PC 를 갈아타면 사라지고**, 그러면 2랩에서 비교할 근거가 ADR 에만 남기 때문이다.
+    """
+    path = answer_path(stem)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="\n") as f:
+        for model in [header, *items]:
+            f.write(json.dumps(model.model_dump(exclude_none=True), ensure_ascii=False) + "\n")
+    return path
+
 def read_chunks(path: Path) -> Iterator[dict[str, Any]]:
     """헤더를 건너뛰고 청크 행만. 4단계 임베더는 파일 경계를 무시하고 이것만 이어 붙인다."""
     for row in read(path):

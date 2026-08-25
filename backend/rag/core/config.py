@@ -22,6 +22,9 @@ EMBED_DIR: Path | None = PROCESSED_DIR / "embeddings" if PROCESSED_DIR else None
 # 6단계 3파전 덤프. **미추적이다** — 기계 산출물이고 chunk_id 의 수집 날짜에 묶여 재수집하면
 # 통째로 낡는다. 판단이 남는 자리는 `docs/decisions.md` 의 D-024 다 (D-024 ④).
 EVAL_DIR: Path | None = PROCESSED_DIR / "eval" if PROCESSED_DIR else None
+# 9단계 1랩 답변 덤프 (D-028 ⑥). **미추적**이고 2랩(소스 확장 후 재관통) 비교의 재료다.
+# eval/ 과 같은 이유로 여기 둔다 — 기계 산출물이고 재수집하면 chunk_id 가 바뀌어 통째로 낡는다.
+ANSWER_DIR: Path | None = PROCESSED_DIR / "answers" if PROCESSED_DIR else None
 
 # ---------------------------------------------------------------- 7단계 이후: DB (D-025 ②)
 class Settings(BaseSettings):
@@ -43,6 +46,14 @@ class Settings(BaseSettings):
     # 7단계 첫 관통이 쓰는 모델. **판정 승자(qwen3)가 아니라 기준선이다** — D-024 `판정 이후`.
     # 교체는 이 기본값 한 줄이거나 `--model` 한 번이어야 한다("교체가 싸다"의 실제 장치)
     embedding_model_key: str = "bge-m3"
+
+    # 9단계 생성 (D-028). 키는 `backend/.env` 에 이미 있다 — env 이름이 그대로 필드명이다.
+    # **모델명을 상수로 박지 않는 이유**: 세대가 바뀌면 이름이 바뀌는데, 그때 코드를 고치는 것과
+    # `.env` 한 줄을 고치는 것은 되돌리는 비용이 다르다 (D-025 ⑤ 와 같은 판단).
+    gemini_api_key: str = ""
+    # 실측 2026-08-25 — `gemini-2.5-flash` 는 404 를 내며 *"no longer available to new users,
+    # use models/gemini-3.6-flash"* 라고 API 가 직접 알려줬다. 상수로 안 박아 둔 판단이 첫날 값을 했다.
+    gemini_model: str = "gemini-3.6-flash"
 
     model_config = SettingsConfigDict(
         env_file=_ENV_FILES,
