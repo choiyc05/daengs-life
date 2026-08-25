@@ -6,15 +6,15 @@
   VERSION  : 파서를 고쳐 재파싱이 필요해지면 올린다 (D-006 이 "구버전으로 처리된 문서" 를 고를 근거)
   parse()  : 원본 바이트 + meta → Parsed
 
-받기·저장·스킵 판단은 `rag/io.py` 와 CLI 가 한다. 파서는 **그 사이트의 구조만** 안다.
-포맷 처리(괘선표 해석, HTML 블록 추출)는 `rag/extract/` 로 올린다 — 사이트가 달라도 반복되기 때문.
+받기·저장·스킵 판단은 `rag/core/io.py` 와 CLI 가 한다. 파서는 **그 사이트의 구조만** 안다.
+포맷 처리(괘선표 해석, HTML 블록 추출)는 `rag/stages/parse/extract/` 로 올린다 — 사이트가 달라도 반복되기 때문.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any
 
-from ..ir import AnyElement
+from rag.core.ir import AnyElement
 
 
 @dataclass

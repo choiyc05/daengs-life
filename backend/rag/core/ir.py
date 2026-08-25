@@ -130,6 +130,10 @@ class Document(_Base):
     doc_id: str
     source_id: str
     domain: str
+
+    # 콘텐츠 생성 주체(기관명). `.meta.json` 에 있는데 D-019 가 필드 목록에서 빠뜨렸다 —
+    # `documents.source` 컬럼이 이 값을 기다린다 (D-025 ④). 옛 parsed 를 읽을 수 있게 기본값을 둔다
+    source: str = ""
     category: str
     subcategory: str
     trust_level: str
@@ -156,3 +160,59 @@ class Document(_Base):
     # 파서만 아는 부가정보(공포일자·소관부처 등). documents 컬럼이 아니라 역추적·EDA(D-006)용이라
     # 스키마를 강제하지 않는다.
     extra: dict[str, str | None] = {}
+
+
+# ---------------------------------------------------------------- 청크 (3단계 산출물, D-021 ⑤)
+class Chunk(_Base):
+    """`chunks/*.jsonl` 의 한 줄. **행 하나가 자기완결적이다** (D-021 ⑤A).
+
+    D-019 는 parsed 에서 문서 수준 값을 헤더에 몰았고 근거는 "`citation_url` 분기가 세 층에
+    복제된다" 였다. 청크 단계에서는 그 분기가 이미 파서에서 끝나 값만 물려받으므로 같은 근거가
+    성립하지 않는다. 반대로 하류 세 층(임베더·평가·적재기)이 전부 **파일 경계 없이** 읽기 때문에
+    헤더에 두면 그 세 층이 헤더를 들고 다녀야 한다.
+    """
+    type: Literal["chunk"] = "chunk"
+
+    # ----- documents 컬럼에 1:1 로 꽂히는 것 (D-008)
+    chunk_id: str                             # → metadata.chunk_id. 골든셋(5단계)이 정답을 가리키는 주소
+    content: str                              # → content. 임베딩 입력이 되는 텍스트 그대로
+    section: str | None = None                # → section. 제15조제2항 / 별표 4 (D-019 §3)
+    document_title: str                       # → document_title
+    source: str = ""                          # → source. 콘텐츠 생성 주체(기관명) — D-025 ④
+    source_url: str | None = None             # → source_url (원본을 받은 곳)
+    category: str = ""
+    subcategory: str = ""
+    source_type: str = ""
+
+    # ----- documents.metadata 로 갈 것
+    raw_file: str = ""
+    format: str = ""
+    trust_level: str = ""
+    published_at: str | None = None
+    license: str = ""
+    citation_url: str | None = None           # 답변에 실을 링크. source_url 과 다르다 (D-019 §4)
+
+    # ----- 우리만 쓰는 것
+    citation: str = ""                        # 사람이 읽을 인용 문자열. chunk_id 와 겸하지 않는다 (D-021 ⑤B)
+    doc_id: str = ""
+    source_id: str = ""                       # 크롤러 소스 계약 id (D-009). → metadata.source_id
+    element_id: str = ""                      # 이 청크가 나온 IR 요소 — 역추적용
+    element_type: str = ""
+    part: str | None = None                   # "supplementary" = 부칙 (D-021 ①). 6단계에서 필터로 끌 자리
+    chars: int = 0
+
+
+class ChunkSet(_Base):
+    """`chunks/*.jsonl` 의 첫 줄. **파일 수준 사실만** 담는다 — 문서 수준 값은 청크 행에 있다.
+
+    `parsed_sha256` 은 재청킹 스킵 판단용이다. 크롤러의 `sha256` → parsed 의 `raw_sha256` →
+    여기의 `parsed_sha256` 으로 같은 축이 한 단계 더 연장된다 (D-001 원칙 2).
+    """
+    type: Literal["chunkset"] = "chunkset"
+    doc_id: str
+    parsed_sha256: str
+    chunker: str
+    chunker_version: int
+    chunked_at: str
+    counts: dict[str, int] = {}
+    warnings: list[str] = []

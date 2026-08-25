@@ -24,8 +24,8 @@ import re
 from bs4 import BeautifulSoup
 
 from crawler.core import textutil            # 「법령」 조항 인용 파싱 — 한국 법령 문서 공통 지식
-from ...io import RawDoc
-from ...ir import Aside, Heading, Para, QA
+from rag.core.io import RawDoc
+from rag.core.ir import Aside, Heading, Para, QA
 from ..base import Parsed
 
 NAME = "easylaw_html"

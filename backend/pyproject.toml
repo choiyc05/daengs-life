@@ -14,6 +14,8 @@ dependencies = [
     "google-genai>=2.18.1",
     "httpx>=0.28.1",
     "lxml>=6.1.2",
+    "pgvector>=0.3",
+    "psycopg[binary]>=3.2",
     "pydantic-settings>=2.15.0",
     "pyyaml>=6.0.3",
     "tzdata>=2026.3",
@@ -46,3 +48,7 @@ torch = [{ index = "pytorch-cu126", marker = "sys_platform == 'win32'" }]
 # (tests/ 는 패키지가 아니라 pytest 가 backend/ 를 자동으로 넣어주지 않는다)
 pythonpath = ["."]
 testpaths = ["tests"]
+# 가중치를 로드하는 테스트는 기본 실행에서 뺀다 — bge-m3 하나가 6.5GB 라
+# pytest 가 분 단위로 느려지면 아무도 안 돌린다. 따로: `uv run pytest -m slow`
+markers = ["slow: 임베딩 모델 가중치를 실제로 로드한다"]
+addopts = "-m 'not slow'"
