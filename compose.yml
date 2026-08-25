@@ -1,3 +1,11 @@
+# **프로젝트명을 못 박는다.** 안 박으면 compose 가 **디렉터리 이름**에서 가져오는데,
+# git worktree 로 병렬 작업을 하면(`feat/rag` · `feat/realtime`) 워크트리마다 프로젝트가
+# 따로 생겨 컨테이너가 갈라진다 — 실제로 2026-08-25 에 `db` 는 `daengs-life`,
+# `redis` 는 `feat-realtime` 프로젝트로 나뉘어 떴다 (`container_name` 은 고정돼 있어서
+# 이름만 보면 멀쩡해 보이는 것이 함정이다).
+# 이름을 고정하면 어느 워크트리에서 `docker compose up -d` 를 해도 같은 한 벌을 쓴다.
+name: daengs-life
+
 services:
   db:
     image: pgvector/pgvector:pg18
@@ -24,6 +32,24 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+
+  # D-001 이 확정한 브로커·캐시. 실제로 쓰는 첫 자리가 RT-001 ④ 다.
+  # **없어도 백엔드는 돈다** (④-c) — 캐시가 프로세스 메모리로 떨어지고 매번 호출한다.
+  redis:
+    image: redis:8-alpine
+    container_name: daengs_life_redis
+    restart: unless-stopped
+    # 실시간 캐시는 잃어도 다시 받으면 그만이라 영속화하지 않는다. 다만 메모리는 묶어 둔다 —
+    # 격자 하나의 단기예보 응답이 100KB 를 넘으므로(실측) 상한이 없으면 계속 자란다
+    command: ["redis-server", "--save", "", "--appendonly", "no",
+              "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   pgdata:

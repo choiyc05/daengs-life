@@ -6,6 +6,10 @@ readme = "README.md"
 requires-python = ">=3.12, <3.13"
 dependencies = [
     "beautifulsoup4>=4.15.0",
+    # D-001 오케스트레이션 · RT-001 ④. `ml` 처럼 그룹으로 빼지 않는 이유는 crawler 와 같다 —
+    # 가볍고, 워커·웹이 같은 이미지에서 같은 코드를 import 한다 (D-009 의존성 그룹 절)
+    "celery>=5.5",
+    "redis>=6.0",
     "fastapi[standard]>=0.141.1",
     "google-genai>=2.18.1",
     "httpx>=0.28.1",

@@ -5,8 +5,10 @@
 2. **실시간 조회형** — 산책 적합 날씨·미세먼지 (GPS 기반, 실질 해상도는 동 단위가 상한)
 
 ## 작업 방식 (중요)
-- 파트별 **논의 → `docs/decisions.md`에 결정 기록(ADR) → 구현** 순서. 사용자가 명시하기 전에 구현으로 넘어가지 말 것
-- 결정 상태: ✅ 확정 / 🔶 제안(논의중). 논의 결과는 decisions.md에 반영하고 커밋
+- 파트별 **논의 → 결정 기록(ADR, 아래 번호 규칙) → 구현** 순서. 사용자가 명시하기 전에 구현으로 넘어가지 말 것
+- 결정 상태: ✅ 확정 / 🔶 제안(논의중). 논의 결과는 결정 파일에 반영하고 커밋
+- **ADR 번호는 파트별로 파일이 갈린다** — 공통·파트① = `docs/decisions.md` 의 `D-` /
+  파트②(실시간) = `docs/decisions-realtime.md` 의 `RT-`. 병렬 브랜치가 같은 번호를 각자 발급하는 것을 막는다
 - 크롤링 산출물은 `data/` (규칙: `data/README.md` — 원본 불변, `.meta.json` 필수, meta 없으면 인덱싱 금지,
   **`data/` 의 수집 결과물은 전부 git 미추적** — 원본·meta·크롤로그 모두 로컬 상태다 (D-017).
   추적하는 것은 `seed_sources.yaml` 과 `.gitkeep` 뿐)
@@ -15,15 +17,18 @@
   (앞으로 할 일의 명세). 브랜치 하나 = 기능 하나 = PR 하나
 - **태스크·P0/P1 의 단일 소스는 그 PR 본문 체크리스트**이고 md 에는 적지 않는다 —
   세션 시작 시 `gh pr view <브랜치의 PR>` 로 읽을 것. Projects 보드는 PR 이 여러 개가 되면 그때 (workflow.md §3)
-- 브랜치에서 작업 후 커밋+푸시. 현재 병렬 2개: `feat/rag`(파트① 3단계 청커) · `feat/realtime`(파트② 착수)
+- 브랜치에서 작업 후 커밋+푸시. **`feat/realtime` 은 2026-08-25 `main` 에 머지됐다**(PR #2). 지금 살아 있는 브랜치는 `feat/rag` 하나 —
+  파트① 9단계(생성+`/ask`) 설계까지 끝났고 구현이 남았다. **머지로 `app/`·`realtime/`·`tasks/` 가 이 브랜치에 들어와 있다**
 
 ## 스택
-- backend: FastAPI + uv (Python), LLM은 Gemini API 예정. **`backend/` 는 uv 프로젝트 하나**이고 그 안에 패키지가 셋으로 나뉜다 (D-018): `crawler/` 수집 · `rag/` 인덱싱 · `app/` 서빙(예정). **`rag/` 안은 순서로 가른다**(D-023) — `pipeline.py`(순서의 단일 소스) · `core/`(config·io·ir) · `stages/`(parse/·chunk·embed·goldenset…). 의존 방향은 **app→rag→crawler** 한쪽뿐이고 `tests/test_import_direction.py` 가 막는다.
+- backend: FastAPI + uv (Python), LLM은 Gemini API 예정. **`backend/` 는 uv 프로젝트 하나**이고 그 안에 패키지가 다섯으로 나뉜다 (D-018 · D-027): `crawler/` 수집 · `rag/` 인덱싱(parse→chunk→embed→load→search) · `realtime/` 실시간 · `tasks/` Celery 워커·Beat · `app/` 서빙(controllers·services·dto). **`rag/` 안은 순서로 가른다**(D-023) — `pipeline.py`(순서의 단일 소스) · `core/`(config·io·ir) · `stages/`. 의존 방향은 **app→{rag,realtime}→crawler** 한쪽뿐이고 `tests/test_import_direction*.py` 둘이 막는다 (방향 + **범위**).
   실행: `cd backend && uv run python -m crawler run --source <id>` / `uv run python -m rag parse`
+- 로컬 인프라: `docker compose up -d` — `db`(postgres+pgvector) · **`redis`**(D-001 브로커·캐시, RT-001 ④ 가 첫 사용처)
+  compose 프로젝트명은 `compose.yml` 에 `name: daengs-life` 로 **못 박혀 있다** — 안 박으면 워크트리마다
+  프로젝트가 갈라져 컨테이너가 두 벌이 된다 (`container_name` 이 같아서 이름만 보면 멀쩡해 보인다)
 - DB: postgres + **pgvector 0.8.6** — `documents` 테이블: `embedding vector(1024)`, `content_hash`(중복 방지 자연키), category CHECK(policy/travel/food), source_type CHECK(document/web/api/manual), source_url/document_title/section 컬럼 (조항 인용용) — D-008
 - 오케스트레이션: **Celery + Beat + Redis** (D-001 확정 — Airflow 아님)
 - frontend: Next.js (단순 확인용)
-- 로컬: `docker compose up -d` (컨테이너 `daengs_life_db`, DB명 `lifedb`, init은 `db/init/`)
 
 ## 현재 상태 (2026-08-22 기준)
 - 완료: 데이터 소스 조사(`docs/data-sources.md` — 파트별 체크리스트), 실시간 API 조사+GPS 결론(`docs/realtime-apis.md`), DB 기동·스키마 검증
@@ -42,7 +47,9 @@
   / **D-025 7단계 적재 5결정(upsert+한 트랜잭션 · psycopg3+SQL 직접 · 중복은 대표+merged_from · source 를 파서·청커에 실음 · 임베딩 지문을 (chunk_id,content) 로)**
   / **D-026 8단계 검색(부칙 기본 포함·필터는 플래그 / 검색은 `stages/search.py` 하나, CLI·9단계·FastAPI 가 같은 함수)**
     — **판정 완료: 승자 `Qwen/Qwen3-Embedding-0.6B`** (Hit@5 6:4:3, 나머지 둘 탈락). **첫 관통은 `bge-m3` 로**
-  / **D-027 9단계 서빙 6결정(모델 수명은 호출자 소유·서빙은 CPU 상주 / `/ask` 는 답변+근거, 1랩 응답은 제품 계약 아닌 관찰 도구 / `app/` 은 층 없음 — 조립 순서는 `rag.stages.generate.ask()` 한 곳 / `def`+요청당 커넥션 / 답변 덤프는 결정적 축 3개·논리 주소 병기)**
+  / **D-027 서빙 계층 배치**(파트②가 발급, **두 파트 공통**) — `app/`={controllers,services,dto,deps}, 강제 규칙은 *컨트롤러에 로직 0줄*
+  / **D-028 9단계 서빙**(모델 수명은 호출자 소유·서빙은 CPU 상주 / `/ask` 는 답변+근거 — 1랩 응답은 제품 계약 아닌 관찰 도구 /
+  `def` 컨트롤러 / 답변 덤프는 결정적 축 3개·논리 주소 병기) — **③⑤ 는 머지로 다시 열렸다**(아래 9단계)
 - 논의중(🔶):
   D-003 하이브리드·리랭커, D-005 실행순서, D-006 EDA 시스템화, D-007 평가 체계
 - **다음 목표: 수집한 28건 전부로 RAG 한 세트 관통** (아래 9단계). 소스 추가는 그 뒤로 미룸
@@ -88,18 +95,22 @@
    ⓑ **골든셋이 Hit 을 과소평가한다** — easylaw 해설이 본문에 조항 번호를 담고 있어 실제로는 답인데 `must` 가 아니다.
    즉 `Hit@5=0.200` 은 "20%만 답한다"가 아니라 "법령 조문에 20%만 닿는다" (D-022 재검토 대기)
    실행: `uv run python -m rag search "질의"` / `--questions` (검증질문 7개 = 검문소③)
-9. **LLM 생성**(Gemini) + FastAPI `/ask` → (선택) Next.js  ← **설계 D-027 ①~⑥ 확정, 다음은 구현**
+9. **LLM 생성**(Gemini) + FastAPI `/ask` → (선택) Next.js  ← **D-028 ①②④⑥ 확정 · ③⑤ 재논의 후 구현**
    **한 랩 = `/ask` 까지**(사용자, 2026-08-25). 그 뒤 **1단계 소스를 최대한 확장해 2랩**을 돈다 —
-   그래서 1랩의 목표는 좋은 답이 아니라 **2랩과 비교 가능한 상태**다(D-027 ⑥ 답변 덤프)
+   그래서 1랩의 목표는 좋은 답이 아니라 **2랩과 비교 가능한 상태**다(D-028 ⑥ 답변 덤프)
+   ⚠️ **머지가 D-028 ③을 무효로 만들었다** — `app/` 배치는 **D-027**(controllers/services/dto)을 따른다.
+   남은 물음은 배치가 아니라 **조립 순서의 소유자**다: D-027 은 `services/ask.py` 에 두라 하는데 `rag` 는 `app` 을
+   import 할 수 없어(D-014) **`rag generate` CLI 가 그 코드를 못 쓴다** → 검문소④가 서빙과 다른 코드를 검사하게 된다(D-026 ② 위반).
+   ⑤(DB 커넥션 수명)도 `app/deps.py` 가 자리를 비워 둬서 ③과 함께 본다
    ⚠️ **2랩의 비용은 크롤링이 아니라 파서다** — 남은 시드 19개는 소스마다 파서가 필요하고,
    `pdf-entry` 4종(코레일·SRT·서울교통공사·**보험사 약관** = "RAG 핵심 코퍼스")은 **PDF 파서가 아예 없다.**
    `documents.category` CHECK 에 펫보험이 들어갈 값이 없고(policy/travel/food), 골든셋 라벨도
    법제처 차용(D-022 ②)이 안 통해 사람 판단이 든다
    **방침(사용자, 2026-08-25): 먼저 한 세트 붙여서 돌려보고 판단한다.** 설계 논의를 앞세우지 말 것 —
-   답이 실제로 어떻게 나오는지 보고 나서 프롬프트·거부 전략을 정한다(D-028 자리)
-   만들 것: `rag/stages/generate.py`(`answer` 순수 + `ask` 가 검색을 잇는다) · `pipeline.py` 한 줄 ·
-   `generate` 서브커맨드(`--questions` = **검문소④**) · `app/{main,schemas}.py` · `app/routers/ask.py` ·
-   `backend/main.py` 흡수(실행이 `fastapi dev app/main.py` 로 바뀐다) · 테스트 2벌
+   답이 실제로 어떻게 나오는지 보고 나서 프롬프트·거부 전략을 정한다(D-029 자리)
+   만들 것: `rag/stages/generate.py`(`answer` 순수 + `ask`) · `pipeline.py` 한 줄 ·
+   `generate` 서브커맨드(`--questions` = **검문소④**) · `app/{controllers,services,dto}/ask.py` +
+   `app/main.py` 등록 한 줄(D-027 이 정한 자리) · 테스트 2벌. `backend/main.py` shim 정리는 그다음
    ⚠️ **검문소③이 만든 제약**: 검증질문 7개 중 **5개는 top-5 안에 정답 조항이 없다.** 그대로 LLM 에 주면
    그럴듯한 답을 지어낼 위험이 크고, KPI 가 조항 인용이라 **틀린 조항 번호는 답이 없는 것보다 나쁘다.**
    한 세트 돌려본 뒤 이 문제를 어떻게 막을지(프롬프트 vs 구조적 검사) 결정할 것
@@ -114,6 +125,53 @@
   ~~모델 3종 디스크~~ ✅ **실측 ~10GB**(bge-m3 6.5 · KURE 2.2 · Qwen3 1.2). 7단계 이후로는 **승자 Qwen3 1.2GB 만** 필요하다
   - GPU 는 RTX 3050 **6GB** — fp32 모델 3종이 합쳐 ~7GB 라 **한 프로세스에서 연속 로드하면 VRAM 이 누적돼 마지막 모델이 10배 넘게 느려진다.** `rag.embed.release()` 로 모델마다 내린다
 - 테스트: `cd backend && uv run pytest` (의존 방향 가드 + 설정 로딩)
-- 필요 키(**`backend/.env`**): LAW_OC ✅발급완료·설정완료 / DATA_GO_KR_KEY·KAKAO_REST_KEY 미발급 — 발급처는 docs/data-sources.md §9
+- 필요 키(**`backend/.env`**): LAW_OC ✅ / DATA_GO_KR_KEY ✅ / KAKAO_REST_KEY ✅ / KMA_HUB_KEY ✅ (2026-08-24 전부 발급) — 발급처는 docs/data-sources.md §9, 함정은 아래 파트② 절
   - env 배치는 배포 단위 기준(D-014): 루트 `.env`=인프라(compose), `backend/.env`=백엔드 런타임, `frontend/.env`=프론트
   - 읽는 순서 실제 환경변수 > `backend/.env` > 루트 `.env`. 컨테이너에선 `DAENGS_DATA_DIR` 로 data/ 위치 지정
+
+## 파트② 실시간 — 현재 상태 (2026-08-25)
+
+- **설계 완료** — RT-001 하위 18결정 + **RT-002 하위 3결정** 확정 (`docs/decisions-realtime.md`, `RT-` 는 그 파일에만)
+- **구현 9단계 전부 완료.** `feat/realtime` · PR #2 · 테스트 **228 통과/14 skip**
+  검문소 **A**(격자 4지점) · **B**(픽스처 파싱 36) · **C**(산식 재현 34) · **D**(저하 경로 15+18) 통과
+- **`GET /walk` 가 실서버에서 돈다** — `서초2동 (측정소: 강남대로) 기준` · UNSAFE/heat · 타임라인 25 ·
+  권장 구간 `08-25T20:00~08-26T11:00 GOOD` · sources 9/9 · 응답 5KB
+- **서빙 계층 배치는 D-027** (공통 결정이라 `RT-` 가 아니다) — MVC2 를 이 레포 사실에 맞춘 것.
+  `app/`={controllers,services,dto,deps} · M 은 `realtime/`·`rag/` 그대로 · **`models/` 는 없다**(근거는 D-027)
+  강제 규칙은 하나 — **컨트롤러에 로직 0줄**, `test_import_direction_packages.py` 가 기계로 막는다
+- **태스크 단일 소스는 PR #2 본문** (`gh pr view 2`). 단계별 근거는 그 ADR 끝의 구현 계획 9단계
+
+```
+backend/realtime/
+├── config.py geo.py observation.py rules.py thresholds.yaml   ✅
+├── transport/  base·datagokr·kakao·kmahub                     ✅
+├── providers/  7모듈 (+ stn_inf 해금 → AWS 지점표)             ✅
+├── collect.py  조립 — provider 들을 Observations 하나로        ✅ (8)
+├── cache.py cache.yaml  ④ 전체 + ⑤-c stale · Redis 없어도 돔  ✅ (8)
+backend/tasks/  celery_app · realtime — Beat 프리페치           ✅ (8)
+backend/app/    controllers · services · dto · deps  GET /walk  ✅ (9)
+backend/main.py 2줄 shim → app.main:app (완전 이동은 병합 뒤)  ✅ (9)
+```
+
+- 실행: `docker compose up -d redis` → `cd backend && uv run uvicorn main:app` → `GET /walk?lat=&lon=`
+  CLI 로도 같은 것: `uv run python -m realtime walk 37.4979 127.0276`
+  (`--no-cache` 면 Redis 없이 프로세스 메모리로 — ④-c "없어도 돈다"를 눈으로 보는 자리)
+  워커·Beat: `uv run celery -A tasks.celery_app worker --pool=solo` / `... beat`
+
+- ⚠️ **`docs/realtime-apis.md` §6(8/24)보다 코드 주석과 `backend/tests/fixtures/realtime/README.md`(8/25)가 최신이다.**
+  8/25 프로브가 §6 을 넷 뒤집었다 — 포맷 파라미터가 계열마다 다름(`dataType` vs `returnType`) ·
+  `numOfRows` 상한도 계열마다 다름(기상청 1000 정상 / 에어코리아 504) · apihub typ02 는 실패를
+  data.go.kr 봉투로 냄 · 최근접 측정소가 `강남대로`(우리 격자 안, §6.5 의 `강남구`는 밖)
+- **사용자 결정 (2026-08-25) — 다시 제안하지 말 것**
+  · **data.go.kr 운영계정 전환 안 함. 일 1,000회로 계속 간다** → ④-e 절감 대응 중 **1번(AWS 로 실황 대체)이
+    유일한 큰 절감**이고 `stn_inf.php` 에 달려 있다. ④-f 의 `N`=10 은 **운영 상수**
+  · **`getUVIdxV3` 는 축에 안 넣는다** (③-b). 신청은 안 했는데 8/25 현재 200 이다 —
+    "미신청이라 못 쓴다"는 근거만 사라졌고 **결정은 그대로**다 (§6.9)
+- ✅ **블로커 해제 (2026-08-25)** — apihub `stn_inf.php` 활용신청 승인. AWS 745 지점 좌표 확보 →
+  역삼 격자 (61,125) 안에 지점 1개(401 서초) 실재 → **⑤-d 1순위·④-e 1번 둘 다 발동 확인** (§6.9)
+- ✅ **apihub 생활기상지수 — 신청할 것이 없다.** 남은 403 은 `getAirDiffusionIdxV3` 하나인데
+  `kma_life_index` 가 그걸 안 부른다. `getSenTaIdxV3`·`getUVIdxV3` 는 둘 다 200 (§6.9)
+- 🟡 **남은 대기 하나: 특보구역명↔행정구역 매핑표.** 없으면 `kma_warning` 이 시도 단축명(`서울`)으로만
+  찾아 **구 단위 특보를 놓친다**. `stn_inf` 의 `FCT_ID` 는 동네예보구역이라 대체 불가
+- 키 3종 발급 완료. 함정: data.go.kr 은 **Decoding 키**(`config.normalize_key` 가 `%` 보고 1회 디코딩) ·
+  카카오는 `제품 설정 > 카카오맵` **활성화** · apihub 활용신청은 **오퍼레이션 단위**

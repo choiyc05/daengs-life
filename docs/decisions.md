@@ -1,6 +1,9 @@
 # 설계 결정 기록 (Decision Log)
 
 > 상태: ✅ 확정 · 🔶 제안(논의중) · ⏸ 보류. 결정이 뒤집히면 지우지 말고 상태 변경 + 사유 추가.
+>
+> **이 파일은 공통 인프라와 파트①(제도·문서형 RAG)의 `D-` 결정을 담는다.**
+> 파트②(실시간 조회형)는 [decisions-realtime.md](decisions-realtime.md) 의 `RT-` 를 쓴다 — 이유는 그 파일 헤더에.
 
 ---
 
@@ -2550,7 +2553,94 @@ Q4(로트와일러)의 1위는 `easylaw-pet-2-2-1#h2-4` "나의 반려견이 맹
 
 ---
 
-## D-027. 9단계 서빙 — 모델 수명·계층·응답 계약 — ✅ 확정 (2026-08-25, ①~⑥ 전부)
+## D-027. 서빙 계층 배치 — `backend/app/` 의 안쪽 — ✅ 확정 (2026-08-25)
+
+`app/` 을 **어디에 둘지**는 D-009·D-018 이 정했지만(`backend/app/`, 형제 패키지) **그 안을 어떻게
+가를지**는 아무도 안 정했다. 파트①의 `/ask` 와 파트②의 `/walk` 이 같은 앱에 들어오므로
+**두 파트가 공유하는 결정**이고, 그래서 `RT-` 가 아니라 여기 `D-` 로 남긴다.
+
+목적은 아키텍처 이론이 아니라 **협업이다** — "새 엔드포인트를 어디에 놓아야 하나"에 답이 하나뿐인
+상태를 만드는 것. 그래서 규칙을 적게 두고, 그 대신 기계가 지키게 한다.
+
+### 배치 — MVC2 (Model 2) 를 이 레포의 사실에 맞춘 것
+
+```
+backend/
+├── app/                    서빙. **"HTTP 없이는 의미가 없는 것"만 들어온다**
+│   ├── main.py             앱 생성 · 컨트롤러 등록 · lifespan(Redis·DB 수명)
+│   ├── deps.py             의존성 주입 — Cache 싱글턴, (예정) DB 커넥션
+│   ├── controllers/        C — 받고, 서비스 부르고, 끝
+│   │   ├── walk.py           GET  /walk   (파트②)
+│   │   └── ask.py            POST /ask    (파트①, 예정)
+│   ├── services/           유스케이스 조합 — 도메인 호출 + 응답 조립
+│   │   ├── walk.py           collect → judge → ⑥ 계약으로 옮김
+│   │   └── ask.py            search → 프롬프트 → Gemini → 인용 (예정)
+│   └── dto/                V — 요청·응답 Pydantic. **공개 계약**
+│
+├── realtime/  rag/  crawler/     M — 도메인. FastAPI 없이 돈다
+├── tasks/                        Celery. `app` 을 모른다
+└── main.py                       2줄 shim → `app.main:app`
+```
+
+### 경계는 하나의 질문으로 정한다 — "FastAPI 없이 돌아야 하는가"
+
+새 기준을 만든 것이 아니다. **D-001 원칙 1(엔진은 FastAPI 없이 단독 실행)이 이미 그은 선**이고
+`tests/test_import_direction.py` 의 `FORBIDDEN` 이 이미 기계로 지키고 있다. D-027 은 그 선에
+MVC2 의 이름을 붙였을 뿐이다.
+
+| | 자리 | 지금 실물 |
+|---|---|---|
+| CLI 로 돌고 Celery 가 부르는 것 | `app/` **밖** | `python -m {crawler,rag,realtime}` 3개 · `tasks/realtime.py` → `realtime.collect` |
+| HTTP 요청/응답에만 의미가 있는 것 | `app/` **안** | 요청 파싱 · 응답 DTO · 에러 매핑 · 의존성 주입 |
+
+**강제 규칙은 하나다 — 컨트롤러에 로직을 넣지 않는다.** 협업용 규칙은 적을수록 지켜지고,
+이것 하나만 지키면 나머지 층은 갈 곳이 저절로 정해진다.
+
+### `models/` 를 만들지 않는다 — 그리고 **왜 없는지가 이 결정의 본문이다**
+
+교과서 MVC2 라면 `app/models/` 가 있어야 한다. 여기 없는 이유는 취향이 아니라 **넣을 것이 없어서**다:
+
+- **도메인 모델이 이미 도메인 패키지에 있다** — `rag.stages.search.Hit`(`citation`·`section`·
+  `content`) · `realtime.observation.Observations` · `realtime.rules.Verdict`
+- **ORM 이 없다.** 생 `psycopg3` + SQL 이고 DB 행↔객체 매핑은 `rag/stages/load.py` 안의
+  쿼리가 직접 한다 (D-025)
+
+만들면 `Hit` 을 한 번 더 베끼는 층이 되고, 필드 하나 느는 날 두 곳을 고치게 된다.
+**언제 생기는지도 같이 적어 둔다** — ORM(SQLAlchemy·SQLModel 등)을 들이는 날 `app/models/` 가
+그 엔티티의 자리가 된다. 그 전에는 만들지 않는다.
+
+### `dto/` 가 이 구조에서 실제로 버는 것
+
+`Verdict` 를 그대로 직렬화해서 내보내면 **②-d(값의 표현)를 손대는 날 API 가 같이 깨진다.**
+`dto/` 는 도메인의 변화가 HTTP 계약으로 새는 것을 막는 층이고, ⑥ 응답 계약(`location`·`now`·
+`timeline`·`windows`·`sources`)이 그 계약의 내용이다. 이름이 `schemas/` 가 아닌 것은
+MVC2 어휘를 따른 것뿐이다.
+
+### 가드를 한 줄 넓힌다
+
+`test_import_direction_packages.py` 의 `ALLOWED` 에 `app` 을 **`realtime`·`tasks` 와 같은 폭**
+(`crawler.core.config` 하나)으로 추가한다. `app` 은 도메인 패키지를 통해 설정에 닿으므로 직접
+쓸 일이 거의 없고, 목록에 있어야 새로 들어오는 날 잡힌다.
+
+### `backend/main.py` 는 지우지 않고 2줄 shim 으로 남긴다
+
+D-009 이 "`app/`, 이동 예정"이라고 적었지만 **완전 이동은 지금 하지 않는다.** `feat/rag` 가
+병렬로 살아 있고, 그쪽이 그 파일을 건드리면 rename-vs-modify 가 되어 이 상황에서 유일하게
+아픈 충돌이 난다. 파일을 남겨 두면 기존 실행 명령도 안 깨진다. 두 브랜치가 합쳐진 뒤 정리한다.
+
+### 파트①이 `/ask` 를 붙이는 비용
+
+파일 3개 추가(`controllers/ask.py` · `services/ask.py` · `dto/ask.py`) + `main.py` 에 등록 한 줄.
+**두 브랜치가 겹치는 것은 그 한 줄뿐이다.**
+
+---
+
+## D-028. 9단계 서빙 — 모델 수명·응답 계약·조립 순서 — 🔶 논의중 (①②④⑥ 확정 2026-08-25, ③⑤ 재논의)
+
+> ⚠️ **번호를 밀었다 (2026-08-25).** 처음 `D-027` 로 적었는데 `feat/realtime` 이 같은 번호를
+> 먼저 발급해 머지됐다(위 D-027 서빙 계층 배치). CLAUDE.md §4 가 경고한 **병렬 브랜치 번호 충돌**이
+> 실제로 난 것이고, 선점한 쪽이 이긴다. 커밋 `774b967`·`fe12b83`·`867646c`·`a316949` 의 제목에
+> 남은 `D-027` 은 이 결정을 가리킨다.
 
 **배경** — 9단계는 `rag generate`(Gemini 답변)와 FastAPI `/ask` 를 **한 랩에 함께** 만든다
 (사용자, 2026-08-25 — "`/ask` 까지가 한 세트"). 그 뒤에 소스를 확장해 **2랩**을 돈다.
@@ -2663,63 +2753,38 @@ Q4 의 1위 easylaw 청크는 `citation` 이 `easylaw-pet-2-2-1#h2-4` 인데 **�
 관찰 기록이라 "응답을 그대로 저장"이 성립**하고, 발췌면 덤프와 응답이 달라진다.
 크기는 문제가 아니다(top-5 전문이면 JSON ~30KB, localhost다. D-021 ④ 기준 7,500자 초과 청크는 0건).
 
-### ③ `app/` 은 층을 만들지 않는다 — **조립 순서는 `rag` 것이다** (④⑤ 흡수) — ✅ 확정 (2026-08-25)
+### ③ `app/` 배치 — **폐기하고 다시 연다** (2026-08-25, main 머지 후)
 
-기준은 *"이 층이 없으면 무엇이 두 곳에 적히나"* 다. 실제로 후보에 대 보면 층이 거의 안 남는다:
+원래 여기서 *"`app/` 은 층을 만들지 않는다 · `routers/` · `schemas.py` · `deps.py` 없음"* 을 정했고,
+근거는 **"`feat/realtime` 보다 여기가 먼저 도착하므로 여기서 골격을 세운다"** 였다.
 
-| 후보 | 판정 |
-|---|---|
-| `app/services/` | ❌ **`rag/` 가 이미 그 층이다.** 두면 위임 한 줄짜리 함수만 남는다 |
-| `app/deps.py` | ❌ 지금은. 라우터가 하나뿐이라 중복될 게 없다 — `main.py` 의 lifespan + `app.state` 로 충분 |
-| `app/config.py` | ❌ 지금은. CORS origins 는 `["*"]` 하드코딩이고 로컬 검증용이다 |
-| `app/schemas.py` | ✅ ②가 정했다 — `Hit` → pydantic 매핑이 모이는 자리 |
-| `app/routers/` | ✅ 아래 |
+**그 전제가 거짓이었다.** PR #2 가 2026-08-25 04:21 에 머지되면서 `app/` 이 이미 들어왔고,
+**D-027(서빙 계층 배치)** 이 `controllers/` · `services/` · `dto/` · `deps.py` 로 정하면서
+`controllers/ask.py` · `services/ask.py` · `dto/ask.py` 자리까지 표에 적어 뒀다.
+**배치는 그쪽을 따른다** — 먼저 도착한 쪽이 골격을 세운다는 규칙은 우리에게도 그대로 적용된다.
 
-**MVC2 를 그대로 옮기면 빈 층이 생긴다.** 그 패턴의 service·DAO 자리를 이 레포에서는 `rag/stages/`
-와 `load.connect()` 가 이미 차지하고 있다. `app/` 에 service 를 또 두면 할 일이 없다. (두 패키지를
-**조합**하는 엔드포인트가 생기면 그때 층이 생긴다. 지금은 없다.)
+**폐기해도 살아남는 것이 있다.** ③이 진짜로 발견한 것은 층의 개수가 아니라 **조립 순서의 소유자**다.
+`/ask` 와 `rag generate` 가 같은 순서(`인코딩 → search → 프롬프트 → Gemini`)를 밟는데, 그것을 두 곳에
+적으면 D-003 이 8·9단계 사이에 끼는 날 고칠 곳이 둘이 된다 — `pipeline.py` 가 이미 그 자리를 예고해 놨다.
 
-**진짜 발견은 조립 순서다.** `/ask` 한 번은 `질의 인코딩 → search() → 프롬프트 조립 + Gemini` 를
-밟는데, **`rag generate` CLI 도 같은 순서를 밟는다.** 이 순서를 라우터와 CLI 에 각각 적으면
-**D-026 ②가 검색에 대해 막았던 사고가 조립 층에서 반복된다.** 게다가 `pipeline.py` 는
-*"D-003 이 확정되면 8·9단계 사이에 끼어든다"* 고 이미 예고해 놨다 — 리랭커가 끼는 날 고칠 곳이
-둘이면 안 된다. **이 프로젝트에서 순서는 `rag` 의 소유물이다.**
+**그래서 남은 물음은 하나다.** D-027 은 그 조립을 `services/ask.py` 에 두라고 한다. 그런데 `rag` 는
+`app` 을 import 할 수 없으므로(D-014) **`rag generate` CLI 가 그 코드를 못 쓴다.** 그러면
+**검문소④가 서빙과 다른 코드를 검사**하게 되고, 그것은 D-026 ②가 막으려던 상태 그대로다.
+반대로 조립을 `rag.stages.generate.ask()` 에 두면 `services/ask.py` 가 얇아지는데, D-027 은 그 층에
+"유스케이스 조합"을 기대한다. **다시 논의할 것은 배치가 아니라 소유다.**
 
-→ `rag/stages/generate.py` 에 함수를 둘 둔다.
+### ④ 컨트롤러는 `def` 로 쓴다 (스레드풀) — ✅ 확정 (2026-08-25)
 
-- `answer(question, hits) -> Answer` — **순수.** 검색 결과를 받아 프롬프트를 만들고 Gemini 를 부른다
-- `ask(question, *, st=None, conn=None) -> Answer` — `search` → `answer` 를 잇는다.
-  **조립 순서가 여기 한 번만 적힌다.** `st`/`conn` 은 ①의 규약 그대로(받으면 안 닫는다)
+psycopg3 도 임베딩 인코딩도 sync 라 `async def` 안에 넣으면 이벤트 루프가 멈춘다. 이 레포에 async
+경로가 하나도 없으므로 이것이 기본값이고, **나중에 누가 `async def` 로 바꾸지 않도록 여기 적어 둔다.**
+(머지된 `app/controllers/walk.py` 도 `def` 다 — 두 파트가 같은 결론에 독립적으로 닿았다.)
 
-CLI 도 라우터도 `ask()` 를 부른다. 그래서 `app/routers/ask.py` 는 **`ask()` 를 부르고 pydantic 으로
-옮기는 것**이 전부다. **서비스 층이 없는 게 아니라 그 층이 `rag/` 다.**
+### ⑤ DB 커넥션 수명 — 🔶 ③과 함께 다시 본다
 
-**`routers/` 를 지금 두는 것은 YAGNI 예외이고, 근거는 다른 브랜치다.** 라우터 하나에 디렉터리는
-보통 과설계다. 그런데 **`feat/realtime` 의 다음 작업이 `app/` 에 `GET /walk` 를 붙이는 것**이고
-(그쪽 PR: *"본체는 `judge(collect(...), now)` 세 줄이다"* — 얇은 라우터라는 결론에 독립적으로
-도달했다), 두 브랜치가 `app/` 골격을 각자 만들면 머지에서 통째로 충돌한다. **여기가 먼저
-도착하므로 여기서 골격을 세운다.** `routers/{ask,walk}.py` 로 갈라 두면 충돌이 `main.py` 의 라우터
-등록 한 줄로 줄어든다. "곧 필요할 것 같아서"가 아니라 **다른 브랜치가 이미 그 자리로 오고 있어서**다.
-
-산출:
-
-```
-backend/app/__init__.py
-backend/app/main.py          FastAPI · CORS · lifespan(모델 1벌 CPU 상주 — ①) · 라우터 등록
-backend/app/schemas.py       요청·응답 pydantic (②)
-backend/app/routers/ask.py   ask() 호출 + 매핑
-```
-
-`backend/main.py` 는 여기로 흡수된다. 실행이 `fastapi dev app/main.py` 로 바뀌고,
-`tests/test_import_direction.py` 의 *"app/ 은 이동 예정이고 지금은 main.py 가 FastAPI 다"* 주석을
-갱신한다(`FORBIDDEN` 은 그대로 둔다 — crawler 가 서빙 쪽을 못 보게 하는 목록이라 이름이 남아도 무해).
-
-**④ `def` 로 쓴다(스레드풀).** psycopg3 도 인코딩도 sync 라 `async def` 안에 넣으면 이벤트 루프가
-멈춘다. 지금 코드에 async 경로가 하나도 없으므로 이것이 기본값이고, 나중에 누가 `async def` 로
-바꾸지 않도록 여기 적어 둔다.
-
-**⑤ 커넥션은 요청당 연다.** `load.connect()` 그대로. 1,402행 로컬이고 풀이 없어서 막히는 것이 없다.
-`ask(conn=...)` 가 이미 열려 있어 풀이 필요해지면 호출자만 바꾸면 된다 — ①과 같은 모양이다.
+원래 "요청당 `load.connect()` 를 연다"로 정했다. 근거는 1,402행 로컬이라 풀이 없어서 막히는 게
+없다는 것이었고 그건 그대로다. 그런데 머지된 `app/deps.py` 가 `Cache` 를 `lru_cache` 싱글턴으로
+두면서 **"(예정) DB 커넥션"** 이라고 같은 자리를 비워 놨다. ①(모델 수명)과 같은 자리이므로
+**③을 다시 열 때 함께 본다.**
 
 ### ⑥ 1랩 답변은 **결정적인 축으로** 남긴다 — 덤프 미추적 · 요약은 ADR — ✅ 확정 (2026-08-25)
 
@@ -2732,7 +2797,7 @@ backend/app/routers/ask.py   ask() 호출 + 매핑
 흔들린다. 그대로 대조하면 **1랩과 2랩의 차이가 코퍼스 때문인지 샘플링 때문인지 못 가른다**
 (temperature 를 낮춰도 없어지지 않는다). → **축은 결정적인 것 셋으로 잡는다.**
 
-1. 검색 top-5 의 `chunk_id` — 완전 결정적이다(D-027 ① 실측: device 를 바꿔도 순서까지 같다)
+1. 검색 top-5 의 `chunk_id` — 완전 결정적이다(D-028 ① 실측: device 를 바꿔도 순서까지 같다)
 2. 답변이 인용한 조항 번호 목록
 3. 그 조항이 **컨텍스트에 실재했나** — 검문소④가 세는 수 그대로
 
@@ -2756,7 +2821,7 @@ backend/app/routers/ask.py   ask() 호출 + 매핑
 
 ### 재개 조건 / 다음에 할 것
 
-- **D-028 자리** — 근거가 부족할 때의 **거부 전략(프롬프트로 부탁 vs 구조로 검사)** · 인용 검증 ·
+- **D-029 자리** — 근거가 부족할 때의 **거부 전략(프롬프트로 부탁 vs 구조로 검사)** · 인용 검증 ·
   스트리밍. **한 랩 돌려보고 정한다**(사용자, 2026-08-25). 검문소③이 만든 제약이 여기 걸려 있다 —
   검증질문 7개 중 **5개는 top-5 안에 정답 조항이 없고**, KPI 가 조항 인용이라 **틀린 조항 번호는
   답이 없는 것보다 나쁘다**
@@ -2766,8 +2831,9 @@ backend/app/routers/ask.py   ask() 호출 + 매핑
   두들겨 본 뒤에 본다
 - 만들 것: `rag/stages/generate.py`(신규) · `pipeline.py` `STAGES` 에 `generate` 한 줄 ·
   `__main__.py` 서브커맨드 · `core/config.py` 에 Gemini 설정 · `core/io.py` 에 답변 덤프 ·
-  `app/{__init__,main,schemas}.py` · `app/routers/ask.py` · `tests/test_generate.py` ·
-  `tests/test_ask_api.py` · `tests/test_import_direction.py` 주석 갱신
+  `app/controllers/ask.py` · `app/services/ask.py` · `app/dto/ask.py` + `app/main.py` 등록 한 줄
+  (D-027 이 정한 자리 — 다만 `services/ask.py` 의 두께는 ③ 재논의가 정한다) ·
+  `tests/test_generate.py` · `tests/test_ask_api.py`
 
 거부 전략(프롬프트 vs 구조)·인용 검증·스트리밍은 **한 랩 돌려보고** 정한다 — 방침이 그렇다
-(사용자, 2026-08-25). D-028 자리다.
+(사용자, 2026-08-25). D-029 자리다.
