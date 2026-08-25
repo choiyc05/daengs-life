@@ -51,6 +51,14 @@ def parse_transcoord(payload: Any) -> tuple[float, float] | None:
         return None
 
 
+# --- 받기와 파싱을 가른다 (RT-002 ②-a) ---------------------------------------
+# 캐시가 저장하는 것은 **원본 응답**이라(`cache.py`) 조립층은 `raw_*` 로 받아 두었다가
+# 히트일 때 같은 `parse_*` 를 다시 먹인다. URL·파라미터 지식은 provider 에 남는다.
+
+def raw_region(point: LatLon, *, budget: Budget | None = None) -> Any:
+    return kakao.get(REGION_PATH, {"x": point.lon, "y": point.lat}, budget=budget)
+
+
 def label_for(point: LatLon, *, budget: Budget | None = None) -> str:
     """사람에게 보여줄 위치 이름. **절대 실패하지 않는다.**
 

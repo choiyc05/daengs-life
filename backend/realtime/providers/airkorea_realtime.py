@@ -144,6 +144,22 @@ def _issued(raw: Any) -> datetime | None:
 
 # --- 조회 --------------------------------------------------------------------
 
+# --- 받기와 파싱을 가른다 (RT-002 ②-a) ---------------------------------------
+# 캐시가 저장하는 것은 **원본 응답**이라(`cache.py`) 조립층은 `raw_*` 로 받아 두었다가
+# 히트일 때 같은 `parse_*` 를 다시 먹인다. URL·파라미터 지식은 provider 에 남는다.
+
+def raw_dnsty(station: str, *, budget: Budget | None = None) -> dict:
+    return datagokr.get(f"{PATH}/getMsrstnAcctoRltmMesureDnsty",
+                        {"stationName": station, "dataTerm": "DAILY", "ver": "1.3",
+                         "numOfRows": 24}, budget=budget)
+
+
+def raw_frcst(day: datetime, *, budget: Budget | None = None) -> dict:
+    return datagokr.get(f"{PATH}/getMinuDustFrcstDspth",
+                        {"searchDate": day.strftime("%Y-%m-%d"), "InformCode": "PM10",
+                         "numOfRows": 10}, budget=budget)
+
+
 def fetch_dnsty(station: str, *, budget: Budget | None = None) -> list[Measurement]:
     # `numOfRows` 를 키우지 않는다 — 이 백엔드는 1000 행에서 4번 중 2번 504 다 (실측 2026-08-25).
     # 24시간 시계열이라 기본값 100 으로 충분하다.

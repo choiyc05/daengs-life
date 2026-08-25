@@ -108,6 +108,14 @@ def _stamp(raw: Any) -> datetime | None:
         return None
 
 
+# --- 받기와 파싱을 가른다 (RT-002 ②-a) ---------------------------------------
+# 캐시가 저장하는 것은 **원본 응답**이라(`cache.py`) 조립층은 `raw_*` 로 받아 두었다가
+# 히트일 때 같은 `parse_*` 를 다시 먹인다. URL·파라미터 지식은 provider 에 남는다.
+
+def raw_senta(area_no: str, now: datetime, *, budget: Budget | None = None) -> Any:
+    return kmahub.get_json(f"{PATH}/getSenTaIdxV3", _params(area_no, now), budget=budget)
+
+
 def fetch_uv(area_no: str, now: datetime, *, budget: Budget | None = None) -> list[Measurement]:
     return parse_uv(kmahub.get_json(f"{PATH}/getUVIdxV3", _params(area_no, now), budget=budget), area_no)
 

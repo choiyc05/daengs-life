@@ -110,6 +110,14 @@ def _stamp(raw: object) -> datetime | None:
         return None
 
 
+# --- 받기와 파싱을 가른다 (RT-002 ②-a) ---------------------------------------
+# 캐시가 저장하는 것은 **원본 응답**이라(`cache.py`) 조립층은 `raw_*` 로 받아 두었다가
+# 히트일 때 같은 `parse_*` 를 다시 먹인다. URL·파라미터 지식은 provider 에 남는다.
+
+def raw_pwn(*, stn: int = 108, budget: Budget | None = None) -> dict:
+    return datagokr.get(f"{PATH}/getPwnStatus", {"stnId": stn, "numOfRows": 5}, budget=budget)
+
+
 def fetch(areas: Iterable[str], *, stn: int = 108, budget: Budget | None = None) -> list[State]:
     """`stn=108` 은 전국 본청이다 — `t6` 이 전국 현황이라 지점을 좁힐 이유가 없다."""
     return parse_pwn(datagokr.get(f"{PATH}/getPwnStatus",

@@ -1231,3 +1231,77 @@ GET /walk?lat=37.4979&lon=127.0276
 - 값이 전부 **문자열**이고, 기온의 이름이 `T1H`(실황·초단기) ↔ `TMP`(단기예보)로 **개명된다** (§6.3)
 - 특보는 값도 상태도 아니라 **자연어 1,610자**다. 특보구역명 매핑표가 `data/reference/` 에 하나 더 필요 (§6.3)
 - 대기질 **등급이 두 벌**이다 — `Grade`(24h 평균) vs `Grade1h`(현재). 산책은 `Grade1h` (§6.3)
+
+---
+
+## RT-002. 8단계 캐시 — 조립 자리 · 인프라 범위 · AWS 지점표 — ✅ 확정 (2026-08-25)
+
+RT-001 ④·⑤-c 를 구현으로 옮기려다 계획의 빈칸 셋이 드러났다. 셋 다 **RT-001 이 정한 것을
+바꾸지 않는다** — 정해진 것을 어디에 놓느냐의 문제라 하위 결정으로 남긴다.
+
+### ②-a 조립 함수는 `realtime/collect.py` 에 둔다
+
+**빈칸** — 검문소 D 는 "에어코리아를 죽였을 때 `AIR=unknown` + 전체가 `GOOD` 으로 안 올라가는지"인데,
+**판정 쪽은 7단계에서 이미 통과했다** (`test_an_unknown_axis_never_lets_the_answer_reach_good` ·
+`test_the_cap_only_blocks_good_so_danger_is_not_hidden` · `test_a_failed_provider_is_visible_next_to_the_verdict`).
+그러므로 D 가 새로 확인하는 것은 판정 규칙이 아니라 **전송 실패가 캐시를 거쳐 판정까지 전달되는
+경로**다. 그러려면 provider 7개를 불러 `Observations` 하나로 묶는 함수가 있어야 하는데, 구현 계획은
+그것을 9단계 `app/` 로 잡아 두었다. **검문소는 8단계에 있다.**
+
+**결정** — `realtime/collect.py` 를 새로 둔다. `cache.py` 가 이것을 감싸고, 9단계 `app/` 는
+`judge(collect_cached(...), now)` 세 줄짜리 껍데기가 된다.
+
+**기준은 "검문소 D 를 FastAPI 없이 돌릴 수 있는가"였다.** 조립이 `app/` 에 있으면 D 를 보려고
+9단계를 먼저 해야 하고 단계 순서가 뒤집힌다. `realtime/` 안에 있으면 `python -m realtime walk` 로
+돈다. 기각한 대안은 `cache.py` 안에 함께 두는 것 — 파일 하나가 ④의 다섯 덩어리 + 조립까지
+여섯 가지를 지고, **캐시를 끈 상태의 순수 조립을 따로 시험할 수 없게 된다.**
+
+①-3(`core/` 를 두지 않는다)과 부딪히지 않는다. `core/` 를 기각한 이유는 "N 개가 공유하는 것"의
+자리가 이미 `transport/` 라서였다. `collect.py` 는 공유물 창고가 아니라 **호출 순서를 아는 한 층**이고,
+지금까지 아무도 그것을 몰랐다 — providers 는 서로를 모르고 rules 는 조회를 모른다.
+
+### ②-b 8단계는 Celery Beat 프리페치까지 세운다. Celery 자리는 `backend/tasks/`
+
+**빈칸** — D-001 이 "Celery + Beat + Redis" 를 확정했지만 **레포에 실물이 하나도 없다.**
+`compose.yml` 은 `db` 하나뿐이고 `pyproject.toml` 에 `celery` 도 `redis` 도 없다. 8단계 ④-c·④-d 가
+그것을 처음으로 실제로 쓰는 자리다.
+
+**결정** — 8단계에서 Redis 어댑터와 Beat 프리페치까지 전부 세운다. ④가 통째로 닫힌다.
+
+기각한 대안은 "메모리 구현만, 인프라는 나중"이었다. 짧고 검문소 D 는 그대로 통과하지만,
+**④의 다섯 덩어리 중 프리페치(④-d)와 영속 예산(④-e 3)이 비어 8단계를 완료라고 부를 수 없다.**
+그리고 일 예산 카운터가 프로세스 메모리에 있으면 재시작마다 리셋이라 ④-e 의 제약이 시험되지 않는다.
+
+**자리는 D-009 가 이미 정해 두었다** — `backend/tasks/` 가 `crawler/`·`rag/`·`realtime/` 의 형제
+패키지이고 의존 방향은 `tasks → …` 한쪽이다. `test_import_direction.py` 의 `FORBIDDEN` 에 `tasks` 가
+이미 들어 있어 아래에서 위를 부르는 것은 이미 막혀 있다. **새로 막는 것은 범위다** —
+`tasks` 를 `test_import_direction_packages.py` 의 `ALLOWED` 에 `realtime` 과 같은 폭
+(`crawler.core.config` 하나)으로 추가한다. 넓히면 워커가 `store`·`Fetcher` 를 끌고 들어와
+"실시간은 저장하지 않는다"가 워커 쪽에서 조용히 뚫린다.
+
+### ②-c AWS 지점표는 `data/reference/` 의 정적 메타다 — 🔴 블로커 해제 (2026-08-25)
+
+`stn_inf.php` 활용신청이 승인됐다. **같은 날 403 → 200.** 확인한 것:
+
+```
+AWS 지점 745개 · LON/LAT 실려 온다
+역삼(37.4979, 127.0276) → 격자 (61,125) 안의 AWS 지점 = 1개 (401 서초, 37.48462/127.02601)
+```
+
+**⑤-d 1순위와 ④-e 1번이 둘 다 실제로 발동한다.** `kma_apihub.fetch` 는 좌표표를 인자로 받도록
+이미 만들어져 있었으므로(6단계) 채울 것은 그 표를 만드는 함수뿐이다 —
+`parse_stations`/`fetch_stations` 를 같은 모듈에 붙인다. **provider = API 서비스 하나 = 모듈 하나**
+규칙 그대로다 (`stn_inf` 와 `nph-aws2_min` 은 같은 typ01 봉투·같은 인증).
+
+신선도는 **월 1회**라 `airkorea_stations` 와 같은 취급이다 — `data/reference/` 캐시, 그것이
+`realtime` 이 `crawler.core.config` 의 경로 탐색을 참조하는 (두 번째이자 마지막) 이유다.
+
+**덤으로 얻은 것과 못 얻은 것** — 표에 `LAW_ID`(법정동코드, 서초 = `1165010800`)가 실려 있어
+생활기상지수의 `areaNo` 재료가 된다. 반면 `FCT_ID`(`11B10101`)는 **동네예보구역**이라 특보구역과
+다르다 — 🟡 특보구역 매핑표는 여전히 필요하다.
+
+**같이 정리된 것** — 대기 중이던 "apihub 생활기상지수 활용신청"은 **신청할 것이 없다.**
+`LivingWthrIdxServiceV3` 아래 남은 403 은 `getAirDiffusionIdxV3`(대기확산지수) 하나뿐인데
+`kma_life_index` 가 그것을 부르지 않는다. 우리가 부르는 `getSenTaIdxV3`·`getUVIdxV3` 는 둘 다 200 이다
+(§6.8 이 403 이라고 적은 `getUVIdxV3` 도 8/25 재확인 결과 열려 있다. ③-b 가 UV 를 축에서 뺀 결정은
+그대로 두고, **"미신청이라 못 쓴다"는 근거만 사실이 아니게 됐다**).

@@ -66,6 +66,14 @@ def in_grid(stations: list[Station], point: LatLon) -> list[Station]:
     return [s for s in stations if same_grid(point, s.point)]
 
 
+# --- 받기와 파싱을 가른다 (RT-002 ②-a) ---------------------------------------
+# 캐시가 저장하는 것은 **원본 응답**이라(`cache.py`) 조립층은 `raw_*` 로 받아 두었다가
+# 히트일 때 같은 `parse_*` 를 다시 먹인다. URL·파라미터 지식은 provider 에 남는다.
+
+def raw_list(addr: str, *, budget: Budget | None = None) -> dict:
+    return datagokr.get(f"{PATH}/getMsrstnList", {"addr": addr, "numOfRows": 100}, budget=budget)
+
+
 def fetch(addr: str, *, budget: Budget | None = None) -> list[Station]:
     """`addr` 는 `'서울'` 같은 시도명. 전국을 한 번에 받으려면 여러 번 부르거나 캐시를 쓴다."""
     return parse_list(datagokr.get(f"{PATH}/getMsrstnList",

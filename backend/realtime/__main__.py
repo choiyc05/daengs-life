@@ -1,9 +1,9 @@
 """CLI.
 
   python -m realtime config              # 키·경로가 실제로 읽히는지
-  python -m realtime geo 37.4979 127.0276  # 위경도 → 격자·대표점
+  python -m realtime geo 37.4979 127.0276   # 위경도 → 격자·대표점
+  python -m realtime walk 37.4979 127.0276  # 조립 → 판정 (검문소 D)
 
-`walk` 서브커맨드가 7단계에서 같은 자리에 붙는다 (RT-001 구현 계획).
 crawler·rag 와 같은 방식이다 — FastAPI 없이 단독으로 돈다 (D-001 원칙 1).
 """
 from __future__ import annotations
@@ -61,6 +61,48 @@ def cmd_geo(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_walk(args: argparse.Namespace) -> int:
+    """조립 → 판정을 한 번에 (RT-002 ②-a). **FastAPI 없이 검문소 D 를 돌릴 자리다.**
+
+    `--no-cache` 는 Redis 를 건드리지 않고 프로세스 메모리로만 돈다 — ④-c 가 "없어도 돈다"를
+    말로만 두지 않으려면 눈으로 볼 수 있어야 한다.
+    """
+    from datetime import datetime
+
+    from .cache import Cache, MemoryStore
+    from .collect import collect
+    from .rules import judge
+
+    cache = Cache(MemoryStore()) if args.no_cache else Cache()
+    now = datetime.now(config.KST)
+    obs = collect(geo.LatLon(args.lat, args.lon), now, cache=cache)
+    loc = obs.location
+
+    print(f"  위치    {loc.label}  (격자 {loc.grid.nx},{loc.grid.ny})")
+    print(f"  측정소  {loc.station or '-'}"
+          f"{f' {loc.station_km}km' if loc.station_km is not None else ''}"
+          f"   AWS {loc.aws_station or '없음 — ⑤-d 1순위 미발동'}   권역 {loc.region or '-'}")
+    print(f"  관측 {len(obs.measurements)}건 · 상태 {len(obs.states)}건\n")
+
+    print("  출처")
+    for r in obs.providers:
+        mark = "stale" if r.stale else ("ok" if r.ok else "FAIL")
+        print(f"    {mark:5s} {r.provider.value:26s} {(r.reason or '')[:60]}")
+
+    verdict = judge(obs, now)
+    if verdict.grade is None:
+        # ⑤-a — 기상청 격자가 통째로 없으면 판정 자체를 안 낸다. 모르는 것을 GOOD 이라고
+        # 하지 않는 것과 같은 규율이고, 여기서 그것이 눈에 보여야 한다
+        print("\n  판정    불가 — 필수 출처(기상청 격자)가 없다 (⑤-a)")
+        return 1
+    print(f"\n  판정    {verdict.grade.name}"
+          f"{'  (' + ', '.join(a.name for a in verdict.dominant) + ')' if verdict.dominant else ''}")
+    if verdict.unknown_axes:
+        print(f"  모르는 축  {', '.join(a.name for a in verdict.unknown_axes)}"
+              f"{'   → GOOD 으로 올리지 않음 (⑤-a)' if verdict.capped else ''}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m realtime", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -72,6 +114,13 @@ def main(argv: list[str] | None = None) -> int:
     p_geo.add_argument("lat", type=float)
     p_geo.add_argument("lon", type=float)
     p_geo.set_defaults(func=cmd_geo)
+
+    p_walk = sub.add_parser("walk", help="조립 → 판정 (검문소 D)")
+    p_walk.add_argument("lat", type=float)
+    p_walk.add_argument("lon", type=float)
+    p_walk.add_argument("--no-cache", action="store_true",
+                        help="Redis 를 안 쓰고 프로세스 메모리로만 (④-c)")
+    p_walk.set_defaults(func=cmd_walk)
 
     args = parser.parse_args(argv)
     return args.func(args)

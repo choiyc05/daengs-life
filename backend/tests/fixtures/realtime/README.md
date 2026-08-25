@@ -27,6 +27,7 @@
 | `airkorea-realtime.dnsty.json` | `getMsrstnAcctoRltmMesureDnsty` | **D** 측정소 값+등급 | 등급 2벌(`Grade`/`Grade1h`) |
 | `airkorea-realtime.frcst.json` | `getMinuDustFrcstDspth` | **E** 권역 등급 예보 | `informGrade` 가 한 문자열 |
 | `kma-apihub.aws.txt` | `nph-aws2_min` | typ01 텍스트 | **EUC-KR** · 전국 지점 · 결측 `-99.9` |
+| `kma-apihub.stations.txt` | `stn_inf.php` | typ01 텍스트 | **EUC-KR** · AWS 745 지점 · `LON` 이 먼저다 · 2026-08-25 활용신청 승인 후 수집 (RT-002 ②-c) |
 | `kma-life-index.senta.json` | `getSenTaIdxV3` | typ02 JSON | **`03 NO_DATA`** — 아래 |
 | `kakao-local.region.json` | `coord2regioncode` | 행정동 | UX 표기용 |
 | `kakao-local.transcoord.json` | `transcoord` | TM 좌표 | 대체 경로(우리는 자체 계산) |

@@ -14,7 +14,7 @@ import pytest
 from realtime.config import KST
 from realtime.geo import Grid, LatLon
 from realtime.observation import (
-    GRADED, REPRESENTATION, SOURCE_PRIORITY, UNVERIFIED, Code, Interval, Measurement,
+    GRADED, REPRESENTATION, NON_VALUE_SOURCES, SOURCE_PRIORITY, UNVERIFIED, Code, Interval, Measurement,
     Observations, ProviderResult, Q, ResolvedLocation, Source, State, StateKind,
     parse_interval, parse_precip_kind, parse_sky,
 )
@@ -53,8 +53,13 @@ def test_every_quantity_has_exactly_one_representation() -> None:
 
 
 def test_every_source_has_a_priority() -> None:
-    """우선순위가 총함수가 아니면 빠진 출처가 조용히 꼴찌가 된다."""
-    assert set(Source) == set(SOURCE_PRIORITY)
+    """우선순위가 총함수가 아니면 빠진 출처가 조용히 꼴찌가 된다.
+
+    예외는 **값을 만들지 않는 출처**뿐이고 그것도 코드에 명시돼 있다 (RT-002 ②-a) —
+    측정소 목록·AWS 지점표·표기는 `ProviderResult` 로만 나타난다.
+    """
+    assert set(Source) - NON_VALUE_SOURCES == set(SOURCE_PRIORITY)
+    assert not (NON_VALUE_SOURCES & set(SOURCE_PRIORITY))
     assert SOURCE_PRIORITY[0] is Source.AWS_MIN           # ⑤-d 1순위
     assert SOURCE_PRIORITY.index(Source.FCST_ULTRA) < SOURCE_PRIORITY.index(Source.FCST_VILLAGE)
 

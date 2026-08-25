@@ -151,6 +151,15 @@ class Source(StrEnum):
     LIFE_INDEX = "kma-life-index:senta"
     WARNING = "kma-warning:pwn"
 
+    # 아래 셋은 **값을 만들지 않는다** — 조회 키를 만드는 provider 이거나(②-a 근거 2) 표기
+    # 전용이다. `Measurement.source` 로는 절대 안 쓰이고, `ProviderResult` 로만 나타난다.
+    # 그래도 여기 있는 이유는 저하 이유를 사람에게 말해야 하기 때문이다 (⑥ `sources`) —
+    # 측정소 목록을 못 받아서 `AIR=UNKNOWN` 이 된 것과 대기질 API 가 죽은 것은 다른 사건이다.
+    # `SOURCE_PRIORITY` 에는 넣지 않는다. 정렬에 낄 일이 없고, 끼면 순위표가 거짓말이 된다.
+    AIRKOREA_STATIONS = "airkorea-stations:list"
+    AWS_STATIONS = "kma-apihub:stn_inf"
+    KAKAO = "kakao-local:region"
+
 
 # ⑤-d 확정 순서. 앞에 있을수록 이긴다.
 #
@@ -170,6 +179,12 @@ SOURCE_PRIORITY: tuple[Source, ...] = (
     Source.WARNING,
 )
 _RANK = {source: i for i, source in enumerate(SOURCE_PRIORITY)}
+
+# 우선순위표에서 빠지는 **유일한 예외**를 코드에 명시한다 (RT-002 ②-a). 테스트에만 두면
+# 새 provider 가 조용히 이 목록에 얹히고, 그 순간 우선순위가 총함수가 아니게 된다.
+# `Measurement.__post_init__` 가 이 셋을 값의 출처로 쓰는 것을 막는다.
+NON_VALUE_SOURCES: frozenset[Source] = frozenset(
+    {Source.AIRKOREA_STATIONS, Source.AWS_STATIONS, Source.KAKAO})
 
 
 # -------------------------------------------------------------------- 관측값 (②-b)
@@ -207,6 +222,10 @@ class Measurement:
             raise TypeError(
                 f"{self.quantity.name} 은 {expected.__name__} 이어야 한다 "
                 f"(받은 것: {type(self.value).__name__}). ②-d-1 의 quantity↔표현 1:1")
+        if self.source in NON_VALUE_SOURCES:
+            # 측정소 목록·표기 provider 는 값을 만들지 않는다. 여기로 오면 조립층이 출처를
+            # 잘못 붙인 것이고, 그대로 두면 ⑤-d 우선순위에서 조용히 꼴찌로 끼어든다.
+            raise ValueError(f"{self.source.value} 은 값을 만들지 않는 출처다 (NON_VALUE_SOURCES)")
         if self.grade is not None and self.quantity not in GRADED:
             raise ValueError(f"{self.quantity.name} 에는 공식 등급이 없다 (②-d-2 의 GRADED 를 볼 것)")
 

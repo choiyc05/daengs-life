@@ -32,6 +32,10 @@ ALLOWED: dict[str, set[str]] = {
     # 경로 탐색 하나뿐 (RT-001 ①-2). `textutil` 은 한국 법령 문서용이라 realtime 이 쓸 일이
     # 없고, 목록이 갈려 있어야 그게 새로 들어오는 날 여기서 잡힌다.
     "realtime": {"crawler.core.config"},
+    # Celery 워커·Beat (D-009 의 형제 패키지). **realtime 과 같은 폭으로 좁힌다**
+    # (RT-002 ②-b) — 넓히면 워커가 `store`·`Fetcher` 를 끌고 들어와 "실시간은 저장하지
+    # 않는다"가 웹이 아니라 워커 쪽에서 조용히 뚫린다.
+    "tasks": {"crawler.core.config"},
 }
 
 

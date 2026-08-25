@@ -55,6 +55,17 @@ class Settings(BaseSettings):
     request_timeout_sec: float = 5.0     # ⑤-b 전체 예산 8초 안에서 개별 호출 상한
     request_budget_sec: float = 8.0      # ⑤-b 재시도까지 포함한 한 요청의 총 예산
 
+    # 월 1회짜리 정적 메타(측정소 목록 17회 · AWS 지점표)는 **요청 예산 밖이다.**
+    # ⑤-b 의 8초는 "한 판정에 쓰는 시간"인데, 여기에 콜드 캐시의 목록 수집까지 넣으면
+    # 첫 요청이 예산을 다 쓰고 판정을 못 낸다. 정상 경로에서는 Beat 가 미리 데우므로
+    # 이 예산은 콜드 스타트에서만 쓰인다 (④-d).
+    static_budget_sec: float = 30.0
+
+    # --- 캐시·오케스트레이션 (D-001 · RT-001 ④) ---
+    # 비어 있으면 캐시가 프로세스 메모리로 떨어진다. **연결 실패도 마찬가지다** — ④-c 가
+    # "Redis 를 쓰되 없어도 돈다"를 확정했고, 그 판단이 `cache.open_store()` 에 있다.
+    redis_url: str = "redis://localhost:6379/0"
+
     model_config = SettingsConfigDict(
         env_file=_ENV_FILES,
         env_file_encoding="utf-8",
@@ -72,6 +83,8 @@ KMA_HUB_KEY = normalize_key(settings.kma_hub_key.strip())
 
 REQUEST_TIMEOUT_SEC = settings.request_timeout_sec
 REQUEST_BUDGET_SEC = settings.request_budget_sec
+STATIC_BUDGET_SEC = settings.static_budget_sec
+REDIS_URL = settings.redis_url.strip()
 
 # 이름 → 값. CLI 출력과 provider 의 "키 없음" 안내가 같은 목록을 본다.
 KEYS: dict[str, str] = {

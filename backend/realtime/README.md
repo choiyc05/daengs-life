@@ -32,13 +32,23 @@ realtime/
 │   ├── airkorea_realtime.py 측정소 실시간(`Grade1h`) · 권역 예보(State)
 │   ├── airkorea_stations.py 조회 키를 만드는 provider
 │   └── kakao_local.py       표기 전용 — 실패해도 관통된다
+├── collect.py        ✅ ★ 조립 — provider 들을 `Observations` 하나로 (RT-002 ②-a).
+│                        **이 층이 아는 유일한 것은 호출 순서다** — providers 는 서로를 모르고
+│                        rules 는 조회를 모른다. 9단계 `app/` 는 여기 위의 껍데기다
 ├── geo.py            ✅ WGS84 → LCC 격자 · 하버사인 최근접 · 같은 격자 판정(⑤-d)
 ├── observation.py    ✅ ★ 계약 — Q(23) · Measurement · State · ResolvedLocation ·
 │                        ProviderResult · Observations + 조회 헬퍼(⑤-d → ②-c)
 ├── rules.py          ✅ 판정 — 축 3개 · 최악 우선 · ⑤-a 상한 · 타임라인/권장구간
 ├── thresholds.yaml   ✅ 임계 — **값마다 출처.** 비인용 넷은 `우리 선택` 으로 표시
-└── cache.py          신선도·TTL·single-flight (④)
+├── cache.py          ✅ 신선도 — 조회 키(④-a) · TTL/재호출/`issued_at` 3분리(④-b) ·
+│                        single-flight(④-d) · 일 예산(④-e) · stale(⑤-c). Redis 없어도 돈다
+└── cache.yaml        ✅ 발표 주기 11종 — **④-b 실측에서 유도.** 비인용 숫자 셋은 `우리 선택`
 ```
+
+프리페치(④-d)는 `realtime` 밖에 있다 — `backend/tasks/` 의 Celery Beat 다 (D-009 · RT-002 ②-b).
+**여기서 Celery 를 알면 `python -m realtime walk` 가 브로커 없이는 안 돈다** (D-001 원칙 1).
+그래서 태스크가 아는 것은 스케줄과 예산 판단뿐이고, 데우는 일은 `collect.warm` 이 한다 —
+요청 경로와 **같은 함수**라 프리페치만 조용히 낡는 일이 없다.
 
 **왜 기관 축이 아닌가** — 기상청 하나가 전송 계약 **셋**(data.go.kr · apihub typ01 · typ02)에
 걸쳐 있다. 기관으로 자르면 `kma.py` 안에 인증 2종·응답 포맷 3종이 들어간다. 경계가 아무것도

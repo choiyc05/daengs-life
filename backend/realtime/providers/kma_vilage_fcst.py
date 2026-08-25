@@ -125,6 +125,23 @@ def _fetch(operation: str, grid: Grid, base: tuple[str, str], rows: int,
                         budget=budget)
 
 
+# --- 받기와 파싱을 가른다 (RT-002 ②-a) ---------------------------------------
+# 캐시가 저장하는 것은 **원본 응답**이라(`cache.py`) 조립층은 `raw_*` 로 받아 두었다가
+# 히트일 때 같은 `parse_*` 를 다시 먹인다. URL·파라미터 지식은 provider 에 남는다.
+
+def raw_ncst(grid: Grid, now: datetime, *, budget: Budget | None = None) -> dict:
+    return _fetch("getUltraSrtNcst", grid, ncst_base(now), 10, budget)
+
+
+def raw_ultra(grid: Grid, now: datetime, *, budget: Budget | None = None) -> dict:
+    return _fetch("getUltraSrtFcst", grid, ultra_base(now), 100, budget)
+
+
+def raw_village(grid: Grid, now: datetime, *, budget: Budget | None = None) -> dict:
+    # **1000 행을 요구한다** — 아래 `fetch` 의 주석 참고
+    return _fetch("getVilageFcst", grid, village_base(now), 1000, budget)
+
+
 def fetch(grid: Grid, now: datetime, *, budget: Budget | None = None
           ) -> tuple[list[Measurement], list[Measurement], list[Measurement]]:
     """셋을 각각 부른다. 호출부가 부분 실패를 잡을 수 있게 예외는 그대로 올린다."""
