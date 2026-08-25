@@ -2805,6 +2805,26 @@ Q4 의 1위 easylaw 청크는 `citation` 이 `easylaw-pet-2-2-1#h2-4` 인데 **�
 
 컨트롤러는 D-027 의 강제 규칙대로 **로직 0줄**이다.
 
+**산출** (구현 완료 2026-08-25 — `173c868` 엔진 · `cb7cd94` 서빙)
+
+```
+rag/stages/generate.py       answer(question, hits) 순수 + ask(...) 가 순서를 소유
+rag/pipeline.py              Stage("generate", 9, ...) — 주석으로 비워 뒀던 자리
+rag/__main__.py              generate 서브커맨드 (--questions = 검문소④)
+app/dto/ask.py               AskIn · AskOut · HitOut  (D-027 의 V)
+app/services/ask.py          서빙 정책 · 에러 매핑 · DTO  (생성 0줄)
+app/controllers/ask.py       POST /ask — 로직 0줄
+app/deps.py                  get_encoder() CPU 싱글턴 · get_conn() 요청당
+app/main.py                  등록 한 줄 ← 두 브랜치가 겹친 것은 이것뿐이다
+```
+
+`backend/main.py` 는 **shim 으로 남는다** — D-027 이 *"두 브랜치가 합쳐진 뒤"* 로 미뤄 둔 것이고,
+지금 옮기면 이번 머지 검증에 원인이 하나 더 붙는다.
+
+실행은 `uv run fastapi run app/main.py` 다 — `fastapi[standard]` 가 주는 CLI 이고
+`uvicorn app.main:app` 과 같은 것이다. ⚠️ **`fastapi dev` 는 reload 가 기본**이라 저장할 때마다
+①의 모델 로드(5~7초)를 다시 문다. 생성 쪽을 안 만질 때는 `fastapi run` 이나 `--reload-dir` 로 좁힌다.
+
 ### ④ 컨트롤러는 `def` 로 쓴다 (스레드풀) — ✅ 확정 (2026-08-25)
 
 psycopg3 도 임베딩 인코딩도 sync 라 `async def` 안에 넣으면 이벤트 루프가 멈춘다. 이 레포에 async
