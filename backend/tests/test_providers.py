@@ -313,6 +313,30 @@ def test_aws_readings_are_minute_fresh() -> None:
 
 # ----------------------------------------------------------- kma-life-index
 
+def test_the_area_code_is_cut_to_the_district() -> None:
+    """§6.9 — 법정동 코드를 그대로 넣으면 `99 검색결과가 없습니다` 다.
+
+    이 실패가 고약한 이유는 **권한 문제처럼 보이지 않는다**는 것이다. 403 도 아니고
+    빈 목록도 아니라 "검색결과 없음" 이라, 지역에 자료가 없는 것으로 읽힌다.
+    자르는 규칙을 한 곳에 두고 여기서 고정한다.
+    """
+    assert kma_life_index.area_code("1165010800") == "1165000000"   # 서초동 → 서초구
+    assert kma_life_index.area_code("1168011400") == "1168000000"   # 일원동 → 강남구
+    assert kma_life_index.area_code("1165000000") == "1165000000"   # 이미 시군구면 그대로
+    assert kma_life_index.area_code("11650108") == "1165000000"     # 짧아도 시군구로 맞춘다
+
+
+def test_the_request_code_is_always_sent() -> None:
+    """`getSenTaIdxV3` 는 없으면 `11 NO_MANDATORY` 이고 `getUVIdxV3` 는 값을 무시한다 (§6.9).
+
+    둘이 같은 봉투를 쓰므로 한 곳에서 붙이되, **무시되는 쪽에 해가 없다는 것을 실측했다**는
+    사실이 이 테스트의 내용이다.
+    """
+    params = kma_life_index._params("1165010800", datetime(2026, 8, 25, 12, tzinfo=KST))
+    assert params["requestCode"] == "A01"
+    assert params["areaNo"] == "1165000000" and params["time"] == "2026082512"
+
+
 def test_life_index_no_data_parses_to_nothing() -> None:
     """실측이 `03 NO_DATA` 다 (§6.8 ③). 전송이 이미 막지만 파서도 빈 응답에 안 터진다."""
     payload = json.loads(text("kma-life-index.senta.json"))
