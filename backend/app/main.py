@@ -14,8 +14,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.controllers import walk
-from app.deps import get_cache
+from app.controllers import ask, walk
+from app.deps import get_cache, get_encoder
 
 
 @asynccontextmanager
@@ -29,8 +29,18 @@ async def lifespan(_: FastAPI):
     정답의 원천이 아니다.
     """
     get_cache()
+
+    # 임베딩 모델도 **앱이 뜰 때 한 벌** 올린다 (D-028 ①). 호출마다 올렸다 내리면 요청당 5~7초다.
+    # **실패해도 앱은 뜬다** — `ml` 그룹(torch)이 없는 환경에서도 `/walk` 는 돌아야 하고,
+    # 캐시가 Redis 없이 뜨는 것과 같은 태도다. 그 경우 `/ask` 만 503 이 된다.
+    try:
+        get_encoder()
+    except Exception as e:                       # noqa: BLE001 — 무엇이든 앱을 못 세우면 안 된다
+        print(f"[lifespan] 임베딩 모델을 못 올렸다 — /ask 는 503 이 된다: {type(e).__name__}: {e}")
+
     yield
     get_cache.cache_clear()
+    get_encoder.cache_clear()
 
 
 def create_app() -> FastAPI:
@@ -51,6 +61,7 @@ def create_app() -> FastAPI:
 
     # --- 컨트롤러 등록. 새 엔드포인트는 여기 한 줄만 는다 ---
     app.include_router(walk.router)
+    app.include_router(ask.router)
 
     @app.get("/", tags=["test"])
     def read_root() -> dict[str, str]:

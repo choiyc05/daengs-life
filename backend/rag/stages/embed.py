@@ -119,12 +119,19 @@ def guard(model: Model, texts: list[str]) -> dict[str, int]:
 
 
 # ---------------------------------------------------------------- 인코딩
-def load_model(model: Model):
+def load_model(model: Model, device: str | None = None):
+    """`device` 를 주면 그대로 쓴다 — **서빙은 CPU 로 고정한다** (D-028 ①).
+
+    자동 선택을 두되 강제할 수 있게 한 이유: 배치(4·6단계)는 GPU 가 필요하지만 서빙은 질의 하나라
+    CPU 로 124ms 면 끝나고, 서버가 2.3GB 를 물고 있으면 2랩에서 새 소스를 임베딩할 때 6GB 중
+    3.7GB 만 남는다. device 를 바꿔도 검색 결과가 안 바뀌는 것은 실측으로 확인했다
+    (검증질문 7개 top-5 가 순서까지 동일, 검문소③ 2/7 재현).
+    """
     from sentence_transformers import SentenceTransformer
 
     import torch
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = device or ("cuda" if torch.cuda.is_available() else "cpu")
     # fp32 를 쓴다. 1,407건이라 fp16 의 속도 이득이 의미 없고, 3파전 점수 차이를 정밀도 차이로
     # 오염시키지 않는다 — D-021 ② 가 문자 기준을 택한 것과 같은 논리다
     return SentenceTransformer(model.repo, device=device)
