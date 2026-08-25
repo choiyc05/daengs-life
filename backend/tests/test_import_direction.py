@@ -17,7 +17,8 @@ CRAWLER_DIR = Path(__file__).resolve().parents[1] / "crawler"
 # crawler 가 import 하면 안 되는 최상위 모듈. app/ 은 이동 예정이고 지금은 main.py 가 FastAPI 다.
 # `rag` 는 파싱~검색 엔진(D-018). 방향은 app -> rag -> crawler 한쪽뿐이라 crawler 가 rag 를
 # 끌어다 쓰면 안 된다 — 뒤집히면 `python -m crawler` 가 torch 까지 세워야 도는 물건이 된다.
-FORBIDDEN = {"app", "tasks", "main", "rag"}
+# `realtime` 은 파트② 실시간 엔진(RT-001 ①-2). 같은 이유로 반대 방향만 허용한다.
+FORBIDDEN = {"app", "tasks", "main", "rag", "realtime"}
 
 
 def _violations() -> list[str]:

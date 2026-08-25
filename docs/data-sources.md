@@ -180,15 +180,44 @@
 
 > 상세: [`docs/realtime-apis.md`](realtime-apis.md). 코퍼스가 아니므로 수집 체크 대상이 아니고, **연동 완료** 체크로 관리한다.
 
-- [ ] **`kma-vilage-fcst`** — 기상청 단기예보 · 🔑`DATA_GO_KR_KEY` · ✅확인
-- [ ] **`kma-weather-warning`** — 기상청 특보 · 🔑`DATA_GO_KR_KEY` · ✅확인
-- [ ] **`kma-life-index`** — 생활기상지수 · 🔑`DATA_GO_KR_KEY` · ✅확인
-- [ ] **`airkorea-realtime`** — 에어코리아 실시간 측정 · 🔑`DATA_GO_KR_KEY` · ✅확인
-- [ ] **`airkorea-stations`** — 에어코리아 측정소 목록 · 🔑`DATA_GO_KR_KEY` · ✅확인
-- [ ] **`kakao-local`** — GPS→행정동, WGS84→TM 좌표 변환 · 🔑`KAKAO_REST_KEY` · ✅확인
-- [ ] **`kma-apihub`** — 기상청 API허브 AWS 분 단위 관측 (선택) · 🔑`KMA_HUB_KEY` · ✅확인
+**연동 확인 방법** — 실서버(`uvicorn main:app`)에 `GET /walk` 을 **세 지역**(역삼·해운대·제주)으로
+날려 각 provider 가 `sources` 에 `ok` 로 찍히는지 본다. `/walk` 이 안 부르는 오퍼레이션만 따로 찌른다.
+마지막 확인 2026-08-25.
+
+- [x] **`kma-vilage-fcst`** — 기상청 단기예보 · 🔑`DATA_GO_KR_KEY` · **3/3 지역 ok**
+      오퍼레이션 셋 다: `getUltraSrtNcst`·`getUltraSrtFcst`·`getVilageFcst`.
+      ⚠️ **실황(`ncst`)은 해운대에서만 불렸다** — 역삼(AWS 401)·제주(AWS 184)는 같은 격자에 AWS
+      지점이 있어 생략됐다. ④-e 1번이 조건부로 발동하는 것이 실측으로 보인 자리다
+- [x] **`kma-weather-warning`** — 기상청 특보 · 🔑`DATA_GO_KR_KEY` · **3/3 지역 ok**
+      코드에서는 `kma-warning:pwn` 이다 (`getPwnStatus`, 전국 1세트라 조회 키가 하나)
+- [ ] **`kma-life-index`** — 생활기상지수 · 🔑**`KMA_HUB_KEY`** (표기 정정 — data.go.kr 이 아니라
+      **API허브**다, §6.4) · **부분 연동**
+      · `getUVIdxV3` ✅ 실동작 — 시각별 값 20건. **`areaNo` 는 시군구 단위**여야 한다
+        (법정동 코드는 `99 검색결과가 없습니다`). 변환은 `kma_life_index.area_code()` (§6.9)
+      · `getSenTaIdxV3` ⬜ `03 NO_DATA` — `requestCode` 를 A01~A08·A41·A42 로 훑고 발표시각을
+        셋 바꿔도 같다. 파라미터가 아니라 자료가 안 실린 것으로 보인다
+      · **판정은 안 막힌다** — ③-b 가 UV 를 축에서 뺐고 ③-c 가 체감온도를 자체 계산으로 확정했다.
+        이 provider 는 **대조용 도구**라 여기 미완이어도 `/walk` 은 완결이다
+- [x] **`airkorea-realtime`** — 에어코리아 실시간 측정 · 🔑`DATA_GO_KR_KEY` · **3/3 지역 ok**
+      `getMsrstnAcctoRltmMesureDnsty`(측정소 실시간) + `getMinuDustFrcstDspth`(권역 예보통보) 둘 다
+- [x] **`airkorea-stations`** — 에어코리아 측정소 목록 · 🔑`DATA_GO_KR_KEY` · **3/3 지역 ok**
+      최근접 측정소가 세 지역 다 잡힌다 — 강남대로 1.82km · 우동 1.66km · 이도동 0.12km.
+      ⚠️ 이 엔드포인트만 간헐적으로 느리다(5초 타임아웃 → 재시도 3회 = 17초, §6.9). 월 1회짜리라
+      **요청 예산 밖**(`config.static_budget_sec`)에 둔 근거가 이것이다
+- [x] **`kakao-local`** — GPS→행정동, WGS84→TM 좌표 변환 · 🔑`KAKAO_REST_KEY` · **둘 다 ok**
+      `coord2regioncode` 3/3 지역(서초2동·우1동·이도2동) · `transcoord` 직접 확인
+      (`(202370.9, 443966.0)`). 후자는 §6.5 대로 평시 경로가 아니라 **폴백**이다
+- [x] **`kma-apihub`** — 기상청 API허브 · 🔑`KMA_HUB_KEY` · **3/3 지역 ok** — (선택) 아니었다
+      `nph-aws2_min`(분 단위 관측) + `stn_inf.php`(지점 745개). 후자가 2026-08-25 승인되면서
+      ⑤-d 1순위가 실제로 발동한다 — "선택"으로 적혀 있었지만 **④-e 의 유일한 큰 절감**이 여기 달렸다
+
+> **6/7 연동 완료.** 남은 하나(`kma-life-index`)는 UV 만 되고 체감온도가 `NO_DATA` 인데,
+> 둘 다 판정 축이 아니라 **파트② 관통에는 영향이 없다** (`GET /walk` 실서버 확인 완료).
 
 ⚠️ 기상청 "체감온도(대상·환경별)" API 가 **2026-05-01 종료** → 체감온도 자체 계산 필요.
+→ **§2.3 정정** (§6.8): data.go.kr 쪽만 종료다. API허브에는 `getSenTaIdxV3` 가 살아 있고 활용신청도
+된다. 자체 계산 결정(③-c)은 유지되지만 **근거가 "없어서"가 아니라 "행정구역·발표시각 단위라
+시각별 판정에 안 맞아서"** 로 바뀐다.
 
 ---
 

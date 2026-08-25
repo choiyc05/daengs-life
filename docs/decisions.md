@@ -1,6 +1,9 @@
 # 설계 결정 기록 (Decision Log)
 
 > 상태: ✅ 확정 · 🔶 제안(논의중) · ⏸ 보류. 결정이 뒤집히면 지우지 말고 상태 변경 + 사유 추가.
+>
+> **이 파일은 공통 인프라와 파트①(제도·문서형 RAG)의 `D-` 결정을 담는다.**
+> 파트②(실시간 조회형)는 [decisions-realtime.md](decisions-realtime.md) 의 `RT-` 를 쓴다 — 이유는 그 파일 헤더에.
 
 ---
 
@@ -1149,3 +1152,85 @@ data/raw/law/law-drf-api-...xml + .meta.json{"source_id":"law-drf-api","domain":
 - 구현 시 만들 것: `backend/rag/chunk.py`(신규) · `tests/test_chunk.py`(검문소①을 테스트로 고정) ·
   `ir.py` 에 `Chunk` 모델 · `io.py` 청크 입출력 · `__main__.py` 에 `chunk` 서브커맨드.
   `config.CHUNK_DIR` 은 이미 있다
+
+---
+
+## D-027. 서빙 계층 배치 — `backend/app/` 의 안쪽 — ✅ 확정 (2026-08-25)
+
+`app/` 을 **어디에 둘지**는 D-009·D-018 이 정했지만(`backend/app/`, 형제 패키지) **그 안을 어떻게
+가를지**는 아무도 안 정했다. 파트①의 `/ask` 와 파트②의 `/walk` 이 같은 앱에 들어오므로
+**두 파트가 공유하는 결정**이고, 그래서 `RT-` 가 아니라 여기 `D-` 로 남긴다.
+
+목적은 아키텍처 이론이 아니라 **협업이다** — "새 엔드포인트를 어디에 놓아야 하나"에 답이 하나뿐인
+상태를 만드는 것. 그래서 규칙을 적게 두고, 그 대신 기계가 지키게 한다.
+
+### 배치 — MVC2 (Model 2) 를 이 레포의 사실에 맞춘 것
+
+```
+backend/
+├── app/                    서빙. **"HTTP 없이는 의미가 없는 것"만 들어온다**
+│   ├── main.py             앱 생성 · 컨트롤러 등록 · lifespan(Redis·DB 수명)
+│   ├── deps.py             의존성 주입 — Cache 싱글턴, (예정) DB 커넥션
+│   ├── controllers/        C — 받고, 서비스 부르고, 끝
+│   │   ├── walk.py           GET  /walk   (파트②)
+│   │   └── ask.py            POST /ask    (파트①, 예정)
+│   ├── services/           유스케이스 조합 — 도메인 호출 + 응답 조립
+│   │   ├── walk.py           collect → judge → ⑥ 계약으로 옮김
+│   │   └── ask.py            search → 프롬프트 → Gemini → 인용 (예정)
+│   └── dto/                V — 요청·응답 Pydantic. **공개 계약**
+│
+├── realtime/  rag/  crawler/     M — 도메인. FastAPI 없이 돈다
+├── tasks/                        Celery. `app` 을 모른다
+└── main.py                       2줄 shim → `app.main:app`
+```
+
+### 경계는 하나의 질문으로 정한다 — "FastAPI 없이 돌아야 하는가"
+
+새 기준을 만든 것이 아니다. **D-001 원칙 1(엔진은 FastAPI 없이 단독 실행)이 이미 그은 선**이고
+`tests/test_import_direction.py` 의 `FORBIDDEN` 이 이미 기계로 지키고 있다. D-027 은 그 선에
+MVC2 의 이름을 붙였을 뿐이다.
+
+| | 자리 | 지금 실물 |
+|---|---|---|
+| CLI 로 돌고 Celery 가 부르는 것 | `app/` **밖** | `python -m {crawler,rag,realtime}` 3개 · `tasks/realtime.py` → `realtime.collect` |
+| HTTP 요청/응답에만 의미가 있는 것 | `app/` **안** | 요청 파싱 · 응답 DTO · 에러 매핑 · 의존성 주입 |
+
+**강제 규칙은 하나다 — 컨트롤러에 로직을 넣지 않는다.** 협업용 규칙은 적을수록 지켜지고,
+이것 하나만 지키면 나머지 층은 갈 곳이 저절로 정해진다.
+
+### `models/` 를 만들지 않는다 — 그리고 **왜 없는지가 이 결정의 본문이다**
+
+교과서 MVC2 라면 `app/models/` 가 있어야 한다. 여기 없는 이유는 취향이 아니라 **넣을 것이 없어서**다:
+
+- **도메인 모델이 이미 도메인 패키지에 있다** — `rag.stages.search.Hit`(`citation`·`section`·
+  `content`) · `realtime.observation.Observations` · `realtime.rules.Verdict`
+- **ORM 이 없다.** 생 `psycopg3` + SQL 이고 DB 행↔객체 매핑은 `rag/stages/load.py` 안의
+  쿼리가 직접 한다 (D-025)
+
+만들면 `Hit` 을 한 번 더 베끼는 층이 되고, 필드 하나 느는 날 두 곳을 고치게 된다.
+**언제 생기는지도 같이 적어 둔다** — ORM(SQLAlchemy·SQLModel 등)을 들이는 날 `app/models/` 가
+그 엔티티의 자리가 된다. 그 전에는 만들지 않는다.
+
+### `dto/` 가 이 구조에서 실제로 버는 것
+
+`Verdict` 를 그대로 직렬화해서 내보내면 **②-d(값의 표현)를 손대는 날 API 가 같이 깨진다.**
+`dto/` 는 도메인의 변화가 HTTP 계약으로 새는 것을 막는 층이고, ⑥ 응답 계약(`location`·`now`·
+`timeline`·`windows`·`sources`)이 그 계약의 내용이다. 이름이 `schemas/` 가 아닌 것은
+MVC2 어휘를 따른 것뿐이다.
+
+### 가드를 한 줄 넓힌다
+
+`test_import_direction_packages.py` 의 `ALLOWED` 에 `app` 을 **`realtime`·`tasks` 와 같은 폭**
+(`crawler.core.config` 하나)으로 추가한다. `app` 은 도메인 패키지를 통해 설정에 닿으므로 직접
+쓸 일이 거의 없고, 목록에 있어야 새로 들어오는 날 잡힌다.
+
+### `backend/main.py` 는 지우지 않고 2줄 shim 으로 남긴다
+
+D-009 이 "`app/`, 이동 예정"이라고 적었지만 **완전 이동은 지금 하지 않는다.** `feat/rag` 가
+병렬로 살아 있고, 그쪽이 그 파일을 건드리면 rename-vs-modify 가 되어 이 상황에서 유일하게
+아픈 충돌이 난다. 파일을 남겨 두면 기존 실행 명령도 안 깨진다. 두 브랜치가 합쳐진 뒤 정리한다.
+
+### 파트①이 `/ask` 를 붙이는 비용
+
+파일 3개 추가(`controllers/ask.py` · `services/ask.py` · `dto/ask.py`) + `main.py` 에 등록 한 줄.
+**두 브랜치가 겹치는 것은 그 한 줄뿐이다.**
