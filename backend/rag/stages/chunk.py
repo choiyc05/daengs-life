@@ -56,6 +56,10 @@ def _doc_fields(head: dict) -> dict:
     """청크 행마다 복제되는 문서 수준 값 (⑤A — 행 하나가 자기완결적이다)."""
     return {
         "doc_id": head["doc_id"],
+        # D-025 ④ — `source`(기관명)는 documents.source 컬럼이 기다리는 값이고,
+        # `source_id` 는 여기 없어서 청커가 헤더를 들고 다니고 있었다(⑤A 가 없애려던 모양)
+        "source": head.get("source", ""),
+        "source_id": head.get("source_id", ""),
         "document_title": head.get("document_title", ""),
         "source_url": head.get("source_url"),
         "citation_url": head.get("citation_url"),

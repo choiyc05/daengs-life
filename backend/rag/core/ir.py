@@ -130,6 +130,10 @@ class Document(_Base):
     doc_id: str
     source_id: str
     domain: str
+
+    # 콘텐츠 생성 주체(기관명). `.meta.json` 에 있는데 D-019 가 필드 목록에서 빠뜨렸다 —
+    # `documents.source` 컬럼이 이 값을 기다린다 (D-025 ④). 옛 parsed 를 읽을 수 있게 기본값을 둔다
+    source: str = ""
     category: str
     subcategory: str
     trust_level: str
@@ -174,6 +178,7 @@ class Chunk(_Base):
     content: str                              # → content. 임베딩 입력이 되는 텍스트 그대로
     section: str | None = None                # → section. 제15조제2항 / 별표 4 (D-019 §3)
     document_title: str                       # → document_title
+    source: str = ""                          # → source. 콘텐츠 생성 주체(기관명) — D-025 ④
     source_url: str | None = None             # → source_url (원본을 받은 곳)
     category: str = ""
     subcategory: str = ""
@@ -190,6 +195,7 @@ class Chunk(_Base):
     # ----- 우리만 쓰는 것
     citation: str = ""                        # 사람이 읽을 인용 문자열. chunk_id 와 겸하지 않는다 (D-021 ⑤B)
     doc_id: str = ""
+    source_id: str = ""                       # 크롤러 소스 계약 id (D-009). → metadata.source_id
     element_id: str = ""                      # 이 청크가 나온 IR 요소 — 역추적용
     element_type: str = ""
     part: str | None = None                   # "supplementary" = 부칙 (D-021 ①). 6단계에서 필터로 끌 자리

@@ -11,8 +11,11 @@
   python -m rag goldenset -v                          # 문항별 라벨까지 전부
   python -m rag evaluate                              # 6단계 3파전 — 채점하고 승자를 고른다 (D-024)
   python -m rag evaluate --model bge-m3 -v            # 하나만 (판정은 셋이 다 있어야 한다)
+  python -m rag load                                  # 7단계 documents 적재 (D-025)
+  python -m rag load --dry-run                        # DB 를 안 건드리고 만들 행만 확인
+  python -m rag load --model qwen3-embedding-0.6b     # 모델 교체 = 같은 명령 재실행
 
-`load`·`search`·`generate` 서브커맨드가 7~9단계에서 같은 자리에 붙는다.
+`search`·`generate` 서브커맨드가 8~9단계에서 같은 자리에 붙는다.
 """
 from __future__ import annotations
 
@@ -24,6 +27,7 @@ import traceback
 from .core import config, io
 from .stages import chunk as chunker
 from .stages import embed, evaluate, goldenset, parse
+from .stages import load as loader
 
 # 윈도우 콘솔 기본 인코딩(cp949)으로는 한글이 깨지고 일부 기호는 예외를 낸다 (crawler CLI 와 같은 처리).
 for _stream in (sys.stdout, sys.stderr):
@@ -170,6 +174,16 @@ def cmd_embed(args: argparse.Namespace) -> int:
     fingerprint = embed.chunks_fingerprint()
     texts = [r["content"] for r in rows]
     print(f"청크 {len(rows)}건  chunks_sha256 {fingerprint[:16]}")
+
+    if args.restamp:
+        # D-025 ⑤ 의 일회성 대가 — 지문 *정의*가 바뀌어 기존 parquet 의 값이 옛 방식이다.
+        # 벡터는 손대지 않고 메타만 갱신하되, 행이 실제로 일치할 때만 찍는다
+        bad = 0
+        for key in keys:
+            ok, why = embed.restamp(key, fingerprint, rows)
+            print(f"  {'restamped' if ok else 'REFUSED':11s} {key:22s} {why}")
+            bad += not ok
+        return 1 if bad else 0
 
     todo: list[tuple[str, dict[str, int]]] = []
     for key in keys:
@@ -339,6 +353,61 @@ def cmd_evaluate(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_load(args: argparse.Namespace) -> int:
+    """chunks + embeddings → documents (D-008, D-025).
+
+    **행을 먼저 다 만들고 나서 DB 를 연다.** 벡터 정렬이나 중복 처리에서 실패할 것이면
+    연결하기 전에 실패하는 편이 싸고, `--dry-run` 이 같은 경로를 그대로 탄다.
+    """
+    key = args.model or config.settings.embedding_model_key
+    if key not in embed.MODELS:
+        print(f"모르는 모델: {key}   가능: {list(embed.MODELS)}")
+        return 1
+
+    try:
+        prepared = loader.prepare(key)
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"  {'FAIL':11s} {exc}")
+        return 1
+
+    print(f"모델 {key} ({prepared.model_repo})")
+    print(f"청크 {len(prepared.rows) + prepared.merged}건 → 행 {len(prepared.rows)}개"
+          f"  (content 중복 {prepared.merged}건 합침 — metadata.merged_from 에 남는다)")
+    if key != "qwen3-embedding-0.6b":
+        # 판정 승자가 아닌 것으로 적재하는 것은 결정이지 사고가 아니다. 다만 조용하면 안 된다
+        print("  * 판정 승자는 qwen3-embedding-0.6b 다 — 첫 관통을 기준선으로 가는 중"
+              " (D-024 `판정 이후`)")
+
+    if args.dry_run:
+        for row in prepared.rows[:args.show]:
+            print(f"    {row['metadata']['chunk_id']:60s} {row['content_hash'][:12]} "
+                  f"{row['category']}/{row['subcategory']}")
+        merged = [r for r in prepared.rows if r["metadata"]["merged_from"]]
+        for row in merged:
+            print(f"    합침: {row['metadata']['chunk_id']}"
+                  f"  <- {row['metadata']['merged_from']}")
+        print("\n(dry-run: DB 를 열지 않았다)")
+        return 0
+
+    with loader.connect() as conn:
+        before = loader.existing_models(conn)
+        for name, n in before:
+            mark = "  " if name == prepared.model_repo else "! "
+            print(f"  {mark}기존 {n:5d}행  {name}")
+        if any(name not in (prepared.model_repo, "(없음)") for name, _ in before):
+            print("  ! 다른 모델의 행이 있다 — upsert 가 같은 content_hash 를 덮어쓴다 (D-025 ①)")
+
+        loader.upsert(conn, prepared.rows)
+        total = loader.count(conn)
+        print(f"  {'upserted':11s} {len(prepared.rows)}행  ·  documents 총 {total}행")
+        for name, n in loader.existing_models(conn):
+            print(f"    {n:5d}행  {name}")
+
+    print("\n인덱스는 적재 후에 수동으로 만든다 (db/indexes.sql):")
+    print("  docker compose exec -T db psql -U $POSTGRES_USER -d $POSTGRES_DB < db/indexes.sql")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="python -m rag")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -376,6 +445,8 @@ def main(argv: list[str] | None = None) -> int:
                      help="토큰 가드만 돌리고 인코딩은 하지 않는다 (가중치 로드 없음)")
     emb.add_argument("--dry-run", action="store_true", help="인코딩은 하고 쓰지는 않는다")
     emb.add_argument("--quiet", action="store_true", help="진행 막대를 끈다")
+    emb.add_argument("--restamp", action="store_true",
+                     help="벡터는 두고 지문만 다시 찍는다 (D-025 ⑤ 일회성. 행이 일치할 때만)")
     emb.set_defaults(fn=cmd_embed)
 
     gld = sub.add_parser("goldenset", help="골든셋 라벨이 실재하는 청크인지 검사 (D-022)")
@@ -389,6 +460,12 @@ def main(argv: list[str] | None = None) -> int:
     ev.add_argument("--dry-run", action="store_true", help="덤프를 쓰지 않는다")
     ev.add_argument("-v", "--verbose", action="store_true", help="문항별 결과를 전부 출력")
     ev.set_defaults(fn=cmd_evaluate)
+
+    ld = sub.add_parser("load", help="7단계 — chunks+embeddings → documents (D-025)")
+    ld.add_argument("--model", help=f"기본 {list(embed.MODELS)[0]} (D-024 판정 이후). 교체는 이 인자 하나")
+    ld.add_argument("--dry-run", action="store_true", help="DB 를 열지 않고 만들 행만 확인")
+    ld.add_argument("--show", type=int, default=5, help="dry-run 에서 보여 줄 행 수")
+    ld.set_defaults(fn=cmd_load)
 
     args = p.parse_args(argv)
     return args.fn(args)

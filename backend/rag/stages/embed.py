@@ -62,15 +62,32 @@ def load_chunks() -> list[dict[str, Any]]:
     return rows
 
 
-def chunks_fingerprint() -> str:
-    """chunks/ 전체의 지문. 파일별 해시를 이름 순으로 이어 다시 해시한다.
+FINGERPRINT_VERSION = 2   # 1 = 청크 파일 해시 / 2 = (chunk_id, content) 쌍 (D-025 ⑤)
 
-    크롤러 `sha256` → parsed `raw_sha256` → chunks `parsed_sha256` → 여기의 `chunks_sha256`.
-    체인을 한 단계 더 연장한 것이고, 별도 상태 파일이 없다 (D-001 원칙 2).
+
+def chunks_fingerprint() -> str:
+    """**임베딩이 실제로 의존하는 것만** 해싱한다 — `chunk_id` 와 `content` (D-025 ⑤).
+
+    v1 은 청크 *파일* 해시를 이어 붙였다. 그러면 `source` 같은 메타 필드를 한 줄 더할 때마다
+    벡터가 무효화되어 1,407청크를 세 모델로 다시 인코딩해야 한다 — **`content` 는 한 글자도
+    안 바뀌는데 같은 숫자를 수십 분에 걸쳐 다시 만드는 것이다.** 실제로 D-025 ④(파서·청커에
+    `source` 싣기)에서 그 대가가 드러나 정의를 좁혔다.
+
+    **`chunk_id` 를 함께 넣는 이유** — `content` 만 보면 재수집으로 날짜가 바뀌어 `chunk_id` 가
+    달라져도 지문이 같게 나오고, parquet 의 행과 청크가 어긋난 채 "최신"으로 통과한다.
+    지문은 "임베딩이 의존하는 것 전부"여야 하고 행의 주소도 거기 포함된다.
+
+    D-001 원칙 2(상류 해시를 하류 헤더에 적어 비교)를 부정하는 것이 아니라 **정밀화**다.
+    축은 그대로이고 "상류 산출물"의 정의가 파일에서 **임베딩 입력**으로 좁아졌다.
     """
     h = hashlib.sha256()
     for path in io.chunk_files():
-        h.update(io.sha256_file(path).encode())
+        for row in io.read_chunks(path):
+            # 널 바이트로 끊는다 — 이어 붙이기만 하면 경계가 옮겨진 다른 조합이 같은 해시를 낸다
+            h.update(row["chunk_id"].encode())
+            h.update(b"\0")
+            h.update(row["content"].encode())
+            h.update(b"\0")
     return h.hexdigest()
 
 
@@ -202,6 +219,7 @@ def write_parquet(model: Model, rows: list[dict[str, Any]], vectors, *,
             b"normalized": b"l2",
             b"dtype": b"float32",
             b"chunks_sha256": fingerprint.encode(),
+            b"fingerprint_version": str(FINGERPRINT_VERSION).encode(),
             b"chunk_count": str(len(rows)).encode(),
             b"max_tokens": str(model.max_tokens).encode(),
             b"query_prompt": model.query_prompt.encode(),
@@ -231,3 +249,35 @@ def is_current(key: str, fingerprint: str) -> bool:
     meta = read_meta(key)
     return bool(meta) and meta.get("chunks_sha256") == fingerprint \
         and meta.get("embedder_version") == str(VERSION)
+
+
+def restamp(key: str, fingerprint: str, rows: list[dict[str, Any]]) -> tuple[bool, str]:
+    """벡터는 그대로 두고 **파일 메타데이터의 지문만** 다시 찍는다 (D-025 ⑤의 일회성 대가).
+
+    지문 *정의*가 바뀌면 기존 parquet 에 적힌 값은 옛 방식이라 그대로는 stale 이다. 그렇다고
+    같은 벡터를 다시 만드는 것은 낭비라 메타만 갱신한다.
+
+    **다만 이 함수는 낡음을 덮는 도구가 되기 쉽다.** 그래서 찍기 전에 확인한다 —
+    `chunk_id` 목록이 **순서까지** 같고 `chars` 도 같아야 한다. parquet 에 `content` 자체는
+    없으므로(D-002 가 중복 저장을 피했다) `chars` 가 내용 동일성의 대리 검사다. 하나라도
+    어긋나면 찍지 않고 이유를 돌려준다 — 그때는 진짜로 다시 인코딩해야 하는 상황이다.
+    """
+    import pyarrow.parquet as pq
+
+    path = parquet_path(key)
+    if not path.is_file():
+        return False, "parquet 이 없다"
+    table = pq.read_table(path)
+    ids = table["chunk_id"].to_pylist()
+    if ids != [r["chunk_id"] for r in rows]:
+        return False, "chunk_id 목록이 다르다 — 메타만 갱신하면 행이 어긋난다. 다시 인코딩할 것"
+    if table["chars"].to_pylist() != [r["chars"] for r in rows]:
+        return False, "chars 가 다르다 — content 가 바뀌었다. 다시 인코딩할 것"
+
+    meta = {k: v for k, v in (table.schema.metadata or {}).items()}
+    before = meta.get(b"chunks_sha256", b"").decode()
+    meta[b"chunks_sha256"] = fingerprint.encode()
+    meta[b"fingerprint_version"] = str(FINGERPRINT_VERSION).encode()
+    meta[b"restamped_at"] = io.now_kst().encode()
+    pq.write_table(table.replace_schema_metadata(meta), path)
+    return True, f"{before[:16]} -> {fingerprint[:16]}"

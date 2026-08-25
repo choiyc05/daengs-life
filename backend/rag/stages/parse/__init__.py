@@ -54,6 +54,8 @@ def parse_doc(doc: io.RawDoc) -> tuple[Document, list[AnyElement], dict[str, int
         doc_id=doc.doc_id,
         source_id=doc.source_id,
         domain=doc.domain,
+        # `.meta.json` 이 유일하게 아는 값이다. 여기서 안 실으면 하류 어디에도 없다 (D-025 ④)
+        source=meta.get("source") or "",
         category=meta["category"],
         subcategory=meta.get("subcategory") or "",
         trust_level=meta.get("trust_level") or "",
