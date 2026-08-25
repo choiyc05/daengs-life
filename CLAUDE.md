@@ -68,13 +68,33 @@
   - env 배치는 배포 단위 기준(D-014): 루트 `.env`=인프라(compose), `backend/.env`=백엔드 런타임, `frontend/.env`=프론트
   - 읽는 순서 실제 환경변수 > `backend/.env` > 루트 `.env`. 컨테이너에선 `DAENGS_DATA_DIR` 로 data/ 위치 지정
 
-## 파트② 실시간 — 현재 상태 (2026-08-24)
+## 파트② 실시간 — 현재 상태 (2026-08-25)
 
-- **설계 완료 — RT-001 하위 18결정 전부 확정.** 기록은 `docs/decisions-realtime.md` (`RT-` 번호는 그 파일에만)
-- **근거가 전부 실측이다** → `docs/realtime-apis.md` **§6** (키 3종으로 API 7종 호출, 전송 계약 4종·응답 모양 5종·함정 3개).
-  비인용 숫자는 넷뿐이고 전부 `# 우리 선택` 으로 표시돼 있다
-- **다음은 구현.** 순서·검문소는 그 ADR 끝의 **구현 계획 9단계**, 태스크는 PR #2 본문 P1
-- ⚠️ **data.go.kr 개발계정은 API 당 일 1,000회.** 그 한도로는 기상청 단기예보가 격자 17개(서울은 30~40)라
-  **운영계정 전환 신청이 사실상 필수** (RT-001 ④-e)
-- 키 3종 발급 완료. 함정: data.go.kr 은 **Decoding 키** · 카카오는 `제품 설정 > 카카오맵` **활성화** 필요 ·
-  apihub 활용신청은 **오퍼레이션 단위**
+- **설계 완료** — RT-001 하위 18결정 전부 확정 (`docs/decisions-realtime.md`, `RT-` 는 그 파일에만)
+- **구현 9단계 중 7까지 완료.** `feat/realtime` · PR #2 · 테스트 **168 통과/14 skip**
+  검문소 **A**(격자 4지점) · **B**(픽스처 파싱 36) · **C**(산식 재현 34) 통과
+- **다음 = 8단계 `cache.py` → 검문소 D**, 그다음 9단계 `app/` FastAPI `GET /walk` 로 끝
+- **태스크 단일 소스는 PR #2 본문** (`gh pr view 2`). 단계별 근거는 그 ADR 끝의 구현 계획 9단계
+
+```
+backend/realtime/
+├── config.py geo.py observation.py rules.py thresholds.yaml   ✅
+├── transport/  base·datagokr·kakao·kmahub                     ✅
+├── providers/  7모듈                                          ✅
+└── cache.py(8) → app/ GET /walk(9)                            ⬜
+```
+
+- ⚠️ **`docs/realtime-apis.md` §6(8/24)보다 코드 주석과 `backend/tests/fixtures/realtime/README.md`(8/25)가 최신이다.**
+  8/25 프로브가 §6 을 넷 뒤집었다 — 포맷 파라미터가 계열마다 다름(`dataType` vs `returnType`) ·
+  `numOfRows` 상한도 계열마다 다름(기상청 1000 정상 / 에어코리아 504) · apihub typ02 는 실패를
+  data.go.kr 봉투로 냄 · 최근접 측정소가 `강남대로`(우리 격자 안, §6.5 의 `강남구`는 밖)
+- **사용자 결정 (2026-08-25) — 다시 제안하지 말 것**
+  · **data.go.kr 운영계정 전환 안 함. 일 1,000회로 계속 간다** → ④-e 절감 대응 중 **1번(AWS 로 실황 대체)이
+    유일한 큰 절감**이고 `stn_inf.php` 에 달려 있다. ④-f 의 `N`=10 은 **운영 상수**
+  · **`getUVIdxV3` 활용신청 안 함** (③-b 가 UV 를 축에서 뺐다)
+- 🔴 **남은 블로커: apihub `stn_inf.php` 활용신청** (`/api/typ01/url/stn_inf.php`, 403).
+  오퍼레이션 단위라 `nph-aws2_min` 과 별개. 없으면 AWS 지점 좌표가 없어 ⑤-d 1순위와 ④-e 1번이 둘 다 미발동
+- 🟡 대기 중(사용자가 "필요할 때 말해달라"): apihub 생활기상지수 활용신청 · 특보구역명↔행정구역 매핑표
+- 키 3종 발급 완료. 함정: data.go.kr 은 **Decoding 키**(`config.normalize_key` 가 `%` 보고 1회 디코딩) ·
+  카카오는 `제품 설정 > 카카오맵` **활성화** · apihub 활용신청은 **오퍼레이션 단위**
+- 실행: `cd backend && uv run python -m realtime config` / `... geo 37.4979 127.0276`
