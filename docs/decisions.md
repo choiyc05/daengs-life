@@ -2550,7 +2550,7 @@ Q4(로트와일러)의 1위는 `easylaw-pet-2-2-1#h2-4` "나의 반려견이 맹
 
 ---
 
-## D-027. 9단계 서빙 — 모델 수명·계층·응답 계약 — 🔶 논의중 (①② 확정 2026-08-25)
+## D-027. 9단계 서빙 — 모델 수명·계층·응답 계약 — 🔶 논의중 (①~⑤ 확정 2026-08-25)
 
 **배경** — 9단계는 `rag generate`(Gemini 답변)와 FastAPI `/ask` 를 **한 랩에 함께** 만든다
 (사용자, 2026-08-25 — "`/ask` 까지가 한 세트"). 그 뒤에 소스를 확장해 **2랩**을 돈다.
@@ -2663,13 +2663,66 @@ Q4 의 1위 easylaw 청크는 `citation` 이 `easylaw-pet-2-2-1#h2-4` 인데 **�
 관찰 기록이라 "응답을 그대로 저장"이 성립**하고, 발췌면 덤프와 응답이 달라진다.
 크기는 문제가 아니다(top-5 전문이면 JSON ~30KB, localhost다. D-021 ④ 기준 7,500자 초과 청크는 0건).
 
-### ③~⑥ 아직 안 정했다
+### ③ `app/` 은 층을 만들지 않는다 — **조립 순서는 `rag` 것이다** (④⑤ 흡수) — ✅ 확정 (2026-08-25)
 
-- **③ `main.py` → `app/` 이동과 층 나눔** — `rag/` 가 이미 service·repository 자리를 차지하고 있어
-  `app/` 에 service 층을 또 두면 위임 한 줄짜리 함수만 남는다. 기준은 *"이 층이 없으면 무엇이 두
-  곳에 적히나"*. ⚠️ `tests/test_import_direction.py` 는 `feat/realtime` 과 충돌 지점이다
-- **④ `def` vs `async def`** — psycopg3 은 sync, 인코딩은 블로킹. ①의 결과에 대한 산수에 가깝다
-- **⑤ DB 커넥션 수명** — 요청당 열기 vs 풀. ①과 같은 질문의 반복이다
+기준은 *"이 층이 없으면 무엇이 두 곳에 적히나"* 다. 실제로 후보에 대 보면 층이 거의 안 남는다:
+
+| 후보 | 판정 |
+|---|---|
+| `app/services/` | ❌ **`rag/` 가 이미 그 층이다.** 두면 위임 한 줄짜리 함수만 남는다 |
+| `app/deps.py` | ❌ 지금은. 라우터가 하나뿐이라 중복될 게 없다 — `main.py` 의 lifespan + `app.state` 로 충분 |
+| `app/config.py` | ❌ 지금은. CORS origins 는 `["*"]` 하드코딩이고 로컬 검증용이다 |
+| `app/schemas.py` | ✅ ②가 정했다 — `Hit` → pydantic 매핑이 모이는 자리 |
+| `app/routers/` | ✅ 아래 |
+
+**MVC2 를 그대로 옮기면 빈 층이 생긴다.** 그 패턴의 service·DAO 자리를 이 레포에서는 `rag/stages/`
+와 `load.connect()` 가 이미 차지하고 있다. `app/` 에 service 를 또 두면 할 일이 없다. (두 패키지를
+**조합**하는 엔드포인트가 생기면 그때 층이 생긴다. 지금은 없다.)
+
+**진짜 발견은 조립 순서다.** `/ask` 한 번은 `질의 인코딩 → search() → 프롬프트 조립 + Gemini` 를
+밟는데, **`rag generate` CLI 도 같은 순서를 밟는다.** 이 순서를 라우터와 CLI 에 각각 적으면
+**D-026 ②가 검색에 대해 막았던 사고가 조립 층에서 반복된다.** 게다가 `pipeline.py` 는
+*"D-003 이 확정되면 8·9단계 사이에 끼어든다"* 고 이미 예고해 놨다 — 리랭커가 끼는 날 고칠 곳이
+둘이면 안 된다. **이 프로젝트에서 순서는 `rag` 의 소유물이다.**
+
+→ `rag/stages/generate.py` 에 함수를 둘 둔다.
+
+- `answer(question, hits) -> Answer` — **순수.** 검색 결과를 받아 프롬프트를 만들고 Gemini 를 부른다
+- `ask(question, *, st=None, conn=None) -> Answer` — `search` → `answer` 를 잇는다.
+  **조립 순서가 여기 한 번만 적힌다.** `st`/`conn` 은 ①의 규약 그대로(받으면 안 닫는다)
+
+CLI 도 라우터도 `ask()` 를 부른다. 그래서 `app/routers/ask.py` 는 **`ask()` 를 부르고 pydantic 으로
+옮기는 것**이 전부다. **서비스 층이 없는 게 아니라 그 층이 `rag/` 다.**
+
+**`routers/` 를 지금 두는 것은 YAGNI 예외이고, 근거는 다른 브랜치다.** 라우터 하나에 디렉터리는
+보통 과설계다. 그런데 **`feat/realtime` 의 다음 작업이 `app/` 에 `GET /walk` 를 붙이는 것**이고
+(그쪽 PR: *"본체는 `judge(collect(...), now)` 세 줄이다"* — 얇은 라우터라는 결론에 독립적으로
+도달했다), 두 브랜치가 `app/` 골격을 각자 만들면 머지에서 통째로 충돌한다. **여기가 먼저
+도착하므로 여기서 골격을 세운다.** `routers/{ask,walk}.py` 로 갈라 두면 충돌이 `main.py` 의 라우터
+등록 한 줄로 줄어든다. "곧 필요할 것 같아서"가 아니라 **다른 브랜치가 이미 그 자리로 오고 있어서**다.
+
+산출:
+
+```
+backend/app/__init__.py
+backend/app/main.py          FastAPI · CORS · lifespan(모델 1벌 CPU 상주 — ①) · 라우터 등록
+backend/app/schemas.py       요청·응답 pydantic (②)
+backend/app/routers/ask.py   ask() 호출 + 매핑
+```
+
+`backend/main.py` 는 여기로 흡수된다. 실행이 `fastapi dev app/main.py` 로 바뀌고,
+`tests/test_import_direction.py` 의 *"app/ 은 이동 예정이고 지금은 main.py 가 FastAPI 다"* 주석을
+갱신한다(`FORBIDDEN` 은 그대로 둔다 — crawler 가 서빙 쪽을 못 보게 하는 목록이라 이름이 남아도 무해).
+
+**④ `def` 로 쓴다(스레드풀).** psycopg3 도 인코딩도 sync 라 `async def` 안에 넣으면 이벤트 루프가
+멈춘다. 지금 코드에 async 경로가 하나도 없으므로 이것이 기본값이고, 나중에 누가 `async def` 로
+바꾸지 않도록 여기 적어 둔다.
+
+**⑤ 커넥션은 요청당 연다.** `load.connect()` 그대로. 1,402행 로컬이고 풀이 없어서 막히는 것이 없다.
+`ask(conn=...)` 가 이미 열려 있어 풀이 필요해지면 호출자만 바꾸면 된다 — ①과 같은 모양이다.
+
+### ⑥ 아직 안 정했다
+
 - **⑥ 1랩 답변을 어떤 모양으로 남기나** — 2랩(소스 확장 후 재관통) 비교의 근거. 덤프는
   `data/processed/answers/` 미추적, 비교 요약은 ADR (D-024 ④와 같은 모양). **이것이 없으면
   2랩에서 "좋아졌다"를 인상으로만 말하게 된다**
