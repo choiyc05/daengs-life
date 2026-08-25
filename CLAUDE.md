@@ -117,6 +117,9 @@
    그럴듯한 답을 지어낼 위험이 크고, KPI 가 조항 인용이라 **틀린 조항 번호는 답이 없는 것보다 나쁘다.**
    한 세트 돌려본 뒤 이 문제를 어떻게 막을지(프롬프트 vs 구조적 검사) 결정할 것
    `GEMINI_API_KEY` 는 `backend/.env` 에 **이미 있다**. 검색은 `rag.stages.search.search()` 를 그대로 부른다(D-026 ②)
+   실행: `uv run fastapi dev app/main.py` → `POST /ask {"question": "..."}` · 검문소④는 `uv run python -m rag generate --questions`
+   ⚠️ **`fastapi dev` 는 reload 가 기본**인데 lifespan 이 임베딩 모델을 올린다(D-028 ①) — 저장할 때마다 로드 5~7초를 다시 문다.
+   생성 쪽을 안 만질 때는 `fastapi run`(reload 없음)이나 `--reload-dir` 로 좁힐 것
 
 검증용 질문 10개 (1~7만 소스 확보됨):
 1. 강아지 등록 안 하면 어떻게 되나요 / 2. 등록정보 변경 언제까지 신고 / 3. 목줄 안 하면 과태료 얼마 /
@@ -155,7 +158,8 @@ backend/app/    controllers · services · dto · deps  GET /walk  ✅ (9)
 backend/main.py 2줄 shim → app.main:app (완전 이동은 병합 뒤)  ✅ (9)
 ```
 
-- 실행: `docker compose up -d redis` → `cd backend && uv run uvicorn main:app` → `GET /walk?lat=&lon=`
+- 실행: `docker compose up -d redis` → `cd backend && uv run fastapi run app/main.py` → `GET /walk?lat=&lon=`
+  (`fastapi[standard]` 가 주는 CLI 다. `uv run uvicorn app.main:app` 도 같은 것 — `backend/main.py` 는 2줄 shim 이라 `main.py` 로도 뜬다)
   CLI 로도 같은 것: `uv run python -m realtime walk 37.4979 127.0276`
   (`--no-cache` 면 Redis 없이 프로세스 메모리로 — ④-c "없어도 돈다"를 눈으로 보는 자리)
   워커·Beat: `uv run celery -A tasks.celery_app worker --pool=solo` / `... beat`
