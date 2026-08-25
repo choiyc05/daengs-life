@@ -20,7 +20,7 @@
 - 브랜치에서 작업 후 커밋+푸시. 현재 병렬 2개: `feat/rag`(파트① 3단계 청커) · `feat/realtime`(파트② 8단계 완료, 9단계 남음)
 
 ## 스택
-- backend: FastAPI + uv (Python), LLM은 Gemini API 예정. **`backend/` 는 uv 프로젝트 하나**이고 그 안에 패키지가 셋으로 나뉜다 (D-018): `crawler/` 수집 · `rag/` 인덱싱(parse→chunk→embed→load→search) · `realtime/` 실시간 · `tasks/` Celery · `app/` 서빙(예정). 의존 방향은 **app→rag→crawler** 한쪽뿐이고 `tests/test_import_direction.py` 가 막는다.
+- backend: FastAPI + uv (Python), LLM은 Gemini API 예정. **`backend/` 는 uv 프로젝트 하나**이고 그 안에 패키지가 다섯으로 나뉜다 (D-018 · D-027): `crawler/` 수집 · `rag/` 인덱싱(parse→chunk→embed→load→search) · `realtime/` 실시간 · `tasks/` Celery 워커·Beat · `app/` 서빙(controllers·services·dto). 의존 방향은 **app→{rag,realtime}→crawler** 한쪽뿐이고 `tests/test_import_direction*.py` 둘이 막는다 (방향 + **범위**).
   실행: `cd backend && uv run python -m crawler run --source <id>` / `uv run python -m rag parse`
 - 로컬 인프라: `docker compose up -d` — `db`(postgres+pgvector) · **`redis`**(D-001 브로커·캐시, RT-001 ④ 가 첫 사용처)
 - DB: postgres + **pgvector 0.8.6** — `documents` 테이블: `embedding vector(1024)`, `content_hash`(중복 방지 자연키), category CHECK(policy/travel/food), source_type CHECK(document/web/api/manual), source_url/document_title/section 컬럼 (조항 인용용) — D-008
@@ -71,10 +71,13 @@
 ## 파트② 실시간 — 현재 상태 (2026-08-25)
 
 - **설계 완료** — RT-001 하위 18결정 + **RT-002 하위 3결정** 확정 (`docs/decisions-realtime.md`, `RT-` 는 그 파일에만)
-- **구현 9단계 중 8까지 완료.** `feat/realtime` · PR #2 · 테스트 **209 통과/14 skip**
-  검문소 **A**(격자 4지점) · **B**(픽스처 파싱 36) · **C**(산식 재현 34) · **D**(저하 경로 15) 통과
-- **다음 = 9단계 `app/` FastAPI `GET /walk` 하나로 끝.** ⑥ 응답 계약대로 담으면 되고
-  본체는 `judge(collect(...), now)` 세 줄이다 — RT-002 ②-a 가 조립을 `realtime/` 안에 뒀다
+- **구현 9단계 전부 완료.** `feat/realtime` · PR #2 · 테스트 **228 통과/14 skip**
+  검문소 **A**(격자 4지점) · **B**(픽스처 파싱 36) · **C**(산식 재현 34) · **D**(저하 경로 15+18) 통과
+- **`GET /walk` 가 실서버에서 돈다** — `서초2동 (측정소: 강남대로) 기준` · UNSAFE/heat · 타임라인 25 ·
+  권장 구간 `08-25T20:00~08-26T11:00 GOOD` · sources 9/9 · 응답 5KB
+- **서빙 계층 배치는 D-027** (공통 결정이라 `RT-` 가 아니다) — MVC2 를 이 레포 사실에 맞춘 것.
+  `app/`={controllers,services,dto,deps} · M 은 `realtime/`·`rag/` 그대로 · **`models/` 는 없다**(근거는 D-027)
+  강제 규칙은 하나 — **컨트롤러에 로직 0줄**, `test_import_direction_packages.py` 가 기계로 막는다
 - **태스크 단일 소스는 PR #2 본문** (`gh pr view 2`). 단계별 근거는 그 ADR 끝의 구현 계획 9단계
 
 ```
@@ -85,10 +88,12 @@ backend/realtime/
 ├── collect.py  조립 — provider 들을 Observations 하나로        ✅ (8)
 ├── cache.py cache.yaml  ④ 전체 + ⑤-c stale · Redis 없어도 돔  ✅ (8)
 backend/tasks/  celery_app · realtime — Beat 프리페치           ✅ (8)
-                                     → app/ GET /walk          ⬜ (9)
+backend/app/    controllers · services · dto · deps  GET /walk  ✅ (9)
+backend/main.py 2줄 shim → app.main:app (완전 이동은 병합 뒤)  ✅ (9)
 ```
 
-- 실행: `docker compose up -d redis` → `cd backend && uv run python -m realtime walk 37.4979 127.0276`
+- 실행: `docker compose up -d redis` → `cd backend && uv run uvicorn main:app` → `GET /walk?lat=&lon=`
+  CLI 로도 같은 것: `uv run python -m realtime walk 37.4979 127.0276`
   (`--no-cache` 면 Redis 없이 프로세스 메모리로 — ④-c "없어도 돈다"를 눈으로 보는 자리)
   워커·Beat: `uv run celery -A tasks.celery_app worker --pool=solo` / `... beat`
 

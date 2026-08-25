@@ -21,6 +21,8 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+import pytest
+
 BACKEND = Path(__file__).resolve().parents[1]
 
 # 패키지 → `crawler` 안에서 import 해도 되는 모듈. 여기 없으면 실패한다.
@@ -36,6 +38,9 @@ ALLOWED: dict[str, set[str]] = {
     # (RT-002 ②-b) — 넓히면 워커가 `store`·`Fetcher` 를 끌고 들어와 "실시간은 저장하지
     # 않는다"가 웹이 아니라 워커 쪽에서 조용히 뚫린다.
     "tasks": {"crawler.core.config"},
+    # 서빙 (D-027). `app` 은 도메인 패키지를 통해 설정에 닿으므로 직접 쓸 일이 거의 없다.
+    # 그래도 목록에 두는 이유는 **새로 들어오는 날 잡히게** 하기 위해서다.
+    "app": {"crawler.core.config"},
 }
 
 
@@ -119,3 +124,54 @@ def test_the_allowed_prefix_rule_does_not_leak() -> None:
     ]:
         got = target == fake_ok or target.startswith(fake_ok + ".")
         assert got is expected, target
+
+
+# --------------------------------------------- 컨트롤러에 로직을 넣지 않는다 (D-027)
+
+# 컨트롤러가 **불러도 되는** 도메인 모듈. 타입과 값 객체뿐이고, 판정·조회는 없다.
+CONTROLLER_MAY_IMPORT = {"realtime.geo", "realtime.cache", "realtime.config"}
+
+# 컨트롤러가 이걸 부르면 그 순간 로직이 컨트롤러로 넘어온 것이다.
+CONTROLLER_MUST_NOT_IMPORT = {"realtime.collect", "realtime.rules", "realtime.observation",
+                              "realtime.providers", "realtime.transport", "rag", "crawler"}
+
+
+def _imports(path: Path) -> list[tuple[int, str]]:
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    found: list[tuple[int, str]] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            found += [(node.lineno, a.name) for a in node.names]
+        elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
+            found.append((node.lineno, node.module))
+    return found
+
+
+def test_controllers_call_services_not_the_domain() -> None:
+    """**D-027 의 유일한 강제 규칙**을 기계가 지킨다 — 컨트롤러에 로직 0줄.
+
+    말로 두면 반드시 새어 나온다. "여기서 한 줄만" 이 쌓이면 서비스 층이 빈 껍데기가 되고,
+    그 순간 이 구조는 이름만 MVC2 가 된다. 판정·조회 모듈을 import 하는 것을 금지하면
+    로직을 넣으려 해도 넣을 재료가 없다.
+    """
+    controllers = BACKEND / "app" / "controllers"
+    if not controllers.is_dir():
+        pytest.skip("아직 컨트롤러가 없다")
+
+    violations: list[str] = []
+    for path in sorted(controllers.rglob("*.py")):
+        for lineno, target in _imports(path):
+            head = target.split(".")[0]
+            if head not in {"realtime", "rag", "crawler"}:
+                continue                              # app.* · fastapi · 표준 라이브러리
+            allowed = any(target == ok or target.startswith(ok + ".")
+                          for ok in CONTROLLER_MAY_IMPORT)
+            banned = any(target == no or target.startswith(no + ".")
+                         for no in CONTROLLER_MUST_NOT_IMPORT)
+            if banned or not allowed:
+                violations.append(f"{path.relative_to(BACKEND)}:{lineno} imports {target!r}")
+
+    assert not violations, (
+        "컨트롤러가 도메인을 직접 부른다 (D-027 — 로직은 `app/services/` 에): "
+        + " · ".join(violations)
+        + f"  |  허용: {', '.join(sorted(CONTROLLER_MAY_IMPORT))}")

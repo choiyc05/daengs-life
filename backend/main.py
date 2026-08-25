@@ -1,17 +1,9 @@
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+"""ASGI 진입점 shim — 실물은 `app/main.py` 에 있다 (D-027).
 
-app = FastAPI(title="강아지 AI 생활 비서")
+이 파일을 남겨 두는 이유는 둘이다. `fastapi dev main.py` 같은 기존 실행 명령이 안 깨지고,
+`feat/rag` 가 병렬로 살아 있는 동안 rename-vs-modify 충돌을 만들지 않는다.
+두 브랜치가 합쳐지면 D-009 대로 정리한다.
+"""
+from app.main import app
 
-# CORS 설정 / .env에서 ORIGINS를 읽어온다. (배포 시점에만 필요)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_headers=["*"],
-    allow_methods=["*"]
-)
-
-@app.get("/", tags=["test"])
-def read_root():
-    return {"Daengs": "Life Assistant"}
+__all__ = ["app"]

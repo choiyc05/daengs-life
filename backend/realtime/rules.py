@@ -13,7 +13,7 @@
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import IntEnum, StrEnum
 from functools import lru_cache
@@ -53,6 +53,11 @@ class AxisVerdict:
     grade: Grade | None                      # None = 판정 근거 없음
     basis: list[Measurement | State]         # 그 등급의 근거가 된 값
     note: str = ""                           # 사람이 읽을 한 줄 ("체감온도 33.3℃")
+    # 우리가 계산한 값. `note` 에도 같은 숫자가 들어가지만 저기는 **사람용 문장**이다.
+    # ⑥ 응답의 `derived` 가 이 값을 요구하는데, 서빙 층이 문장에서 숫자를 파싱하게 두면
+    # 문구를 다듬는 날 API 가 깨진다. `Q` 에 안 넣는 것은 ②-d-3 결정 2 그대로 —
+    # 출처가 "우리"인 값을 관측량 어휘에 섞으면 "이 값이 어디서 왔나"가 흐려진다
+    derived: dict[str, float] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -180,17 +185,19 @@ def judge_heat(obs: Observations, t: datetime) -> AxisVerdict:
     basis += [m for m in (humidity, wind) if m is not None and formula != "기온 그대로"]
     basis += warned
     note = f"체감온도 {value:.1f}℃ ({formula})"
+    derived = {"feels_like_c": round(value, 2)}
 
     if warned:
         # 특보는 **보강**이지 필수가 아니다 (⑤-a 근거 1) — 값만으로도 같은 답이 나오는 것이
         # ③-d 의 설계였다. 다만 떠 있으면 그 자체가 기관의 위험 판정이다.
-        return AxisVerdict(Grade.UNSAFE, basis, f"{note} · {warned[0].kind.name} {warned[0].category}")
+        return AxisVerdict(Grade.UNSAFE, basis,
+                           f"{note} · {warned[0].kind.name} {warned[0].category}", derived)
     if value >= heat["unsafe_from_c"] or value <= heat["cold_unsafe_below_c"]:
-        return AxisVerdict(Grade.UNSAFE, basis, note)
+        return AxisVerdict(Grade.UNSAFE, basis, note, derived)
     if value >= heat["caution_from_c"] or (
             heat["cold_caution_from_c"] <= value < heat["cold_caution_below_c"]):
-        return AxisVerdict(Grade.CAUTION, basis, note)
-    return AxisVerdict(Grade.GOOD, basis, note)
+        return AxisVerdict(Grade.CAUTION, basis, note, derived)
+    return AxisVerdict(Grade.GOOD, basis, note, derived)
 
 
 def judge_air(obs: Observations, t: datetime) -> AxisVerdict:
@@ -304,8 +311,25 @@ def timeline(obs: Observations, start: datetime, hours: int = 24,
     `MAX_HORIZON = 6h` 같은 상수는 두 방향으로 동시에 틀린다 — 기상은 그보다 훨씬 멀리 가고
     대기질 값은 `t=now` 뿐이다. 그래서 여기서는 시각만 걸어가고, 못 채우는 축은 각 `Verdict` 의
     `unknown_axes` 가 스스로 말한다.
+
+    **첫 점만 `start` 그대로이고 나머지는 정시에 맞춘다.** 예보값이 시간 단위라 11:47 지점은
+    사실 11:00 발표값을 쓰는데(`at()` 이 계단 함수다), 라벨까지 11:47 로 두면 `windows` 가
+    "20:47부터 좋다"처럼 **없는 정밀도**를 말하게 된다. 첫 점을 남기는 것은 T+0 이 진짜
+    지금이어야 권장 구간이 "지금부터"를 표현할 수 있어서다. `start` 가 이미 정시면 종전과 같다.
     """
-    return [judge(obs, start + timedelta(hours=h)) for h in range(0, hours + 1, step_hours)]
+    end = start + timedelta(hours=hours)
+    first = start.replace(minute=0, second=0, microsecond=0)
+    if first < start:
+        first += timedelta(hours=step_hours)
+
+    marks: list[datetime] = []
+    mark = first
+    while mark <= end:
+        marks.append(mark)
+        mark += timedelta(hours=step_hours)
+
+    points = marks if first == start else [start, *marks]
+    return [judge(obs, t) for t in points]
 
 
 def windows(verdicts: list[Verdict], at_least: Grade = Grade.GOOD) -> list[tuple[datetime, datetime]]:

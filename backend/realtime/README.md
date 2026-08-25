@@ -67,7 +67,10 @@ N 은 `providers/` 7개이고 걔들이 공유하는 것은 이미 `transport/` 
 (`tests/test_import_direction_packages.py`, RT-001 ①-2). 넓히면 `Fetcher`·`store` 가 따라 들어오고
 그 순간 "실시간은 저장하지 않는다"가 흐려진다.
 
-`rag` 는 허용이 둘(`config` + `textutil`)이라 목록이 패키지별로 갈려 있다.
+`rag` 는 허용이 둘(`config` + `textutil`)이라 목록이 패키지별로 갈려 있다. `tasks`·`app` 도 같은 폭으로 등재돼 있다.
+
+서빙 층(`app/`)의 안쪽 배치는 **D-027** 이다 — 파트①의 `/ask` 와 공유하는 결정이라 `RT-` 가 아니라 `D-` 다.
+`app/controllers/` 가 `realtime.rules`·`realtime.collect` 를 import 하는 것을 가드가 막는다: **로직은 `app/services/` 에.**
 
 ## 실행
 
