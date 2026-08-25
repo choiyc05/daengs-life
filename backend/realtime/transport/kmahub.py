@@ -23,6 +23,7 @@ from typing import Any
 import httpx
 
 from .. import config
+from . import datagokr
 from .base import Budget, NoData, Rejected, TransportError, http_status_failure, request
 
 BASE = "https://apihub.kma.go.kr"
@@ -48,6 +49,7 @@ def _classify(response: httpx.Response) -> TransportError | None:
         payload = response.json()
     except ValueError:
         return None
+
     if isinstance(payload, dict) and "result" in payload:
         result = payload["result"] or {}
         status = str(result.get("status", ""))
@@ -55,7 +57,18 @@ def _classify(response: httpx.Response) -> TransportError | None:
         if status and status != "200":
             kind = Rejected if status.startswith("4") else NoData
             return kind(f"apihub status {status}", hint=message)
-    return None
+        return None
+
+    # **typ02 는 실패도 data.go.kr 봉투로 낸다** (실측 2026-08-25). §6.1 은 실패 봉투가
+    # 두 계열 공통으로 `{result:{status,message}}` 라고 적었는데, 그건 인증·경로 실패의
+    # 이야기였다. 호출이 통한 뒤의 `03 NO_DATA` 는 `{response:{header:{resultCode}}}` 로 온다 —
+    # `result` 만 보면 **값 없음이 성공으로 통과**하고 provider 가 빈 body 를 파싱하게 된다.
+    found = datagokr.result_code(response)
+    if found is None or found[0] == "00":
+        return None
+    code, message = found
+    kind, why = datagokr._RESULT_CODES.get(code, (Rejected, message))
+    return kind(f"resultCode {code}", hint=why)
 
 
 def get_text(path: str, params: dict[str, Any], *, budget: Budget | None = None) -> str:

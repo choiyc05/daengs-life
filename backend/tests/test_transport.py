@@ -60,8 +60,7 @@ def test_datagokr_xml_fallback_is_not_mistaken_for_success() -> None:
     assert isinstance(got, Rejected)
 
 
-def test_datagokr_clamps_num_of_rows(monkeypatch: pytest.MonkeyPatch) -> None:
-    """§6.1 함정 3 — 1000 을 주면 `05` 가 잘 난다. 호출부가 크게 줘도 상한이 이긴다."""
+def _capture(monkeypatch: pytest.MonkeyPatch) -> dict[str, object]:
     seen: dict[str, object] = {}
 
     def fake_request(url, *, classify, params=None, headers=None, budget=None):
@@ -70,10 +69,44 @@ def test_datagokr_clamps_num_of_rows(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(datagokr, "request", fake_request)
     monkeypatch.setattr(config, "DATA_GO_KR_KEY", "x" * 88)
+    return seen
+
+
+def test_rows_default_when_the_caller_says_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen = _capture(monkeypatch)
     datagokr.get("/B552584/ArpltnInforInqireSvc/getMsrstnAcctoRltmMesureDnsty",
-                 {"numOfRows": 1000, "stationName": "강남대로"})
-    assert seen["numOfRows"] == datagokr.MAX_ROWS == 100
+                 {"stationName": "강남대로"})
+    assert seen["numOfRows"] == datagokr.DEFAULT_ROWS == 100
     assert seen["serviceKey"] == "x" * 88
+
+
+def test_a_caller_that_needs_a_big_page_gets_one(monkeypatch: pytest.MonkeyPatch) -> None:
+    """전역 상한이었다면 단기예보가 871건 중 100건만 받아 T+24h 가 9시간에서 끊긴다.
+
+    실측(2026-08-25)이 두 백엔드를 갈랐다 — 기상청 1000행은 4/4 정상, 에어코리아는 4번 중 2번 504.
+    §6.1 함정 3 은 에어코리아 이야기였다.
+    """
+    seen = _capture(monkeypatch)
+    datagokr.get("/1360000/VilageFcstInfoService_2.0/getVilageFcst", {"numOfRows": 1000})
+    assert seen["numOfRows"] == 1000
+
+
+def test_both_format_parameter_names_are_sent(monkeypatch: pytest.MonkeyPatch) -> None:
+    """기상청은 `dataType=JSON`, 에어코리아는 `returnType=json` — 같은 호스트에서 이름이 갈린다."""
+    seen = _capture(monkeypatch)
+    datagokr.get("/whatever", {})
+    assert seen["dataType"] == "JSON" and seen["returnType"] == "json"
+
+
+def test_a_successful_xml_envelope_is_not_read_as_a_failure() -> None:
+    """`getMsrstnList` 는 `dataType=JSON` 을 무시하고 XML 로 **성공**을 준다 (실측 2026-08-25).
+
+    JSON 만 보면 그 성공을 "봉투를 읽지 못했다"로 읽고 세 번 재시도한 뒤 엉뚱한 이유를 보고한다.
+    """
+    xml = "<response><header><resultCode>00</resultCode></header><body/></response>"
+    assert datagokr._classify(httpx.Response(200, text=xml)) is None
+    xml05 = "<response><header><resultCode>05</resultCode></header></response>"
+    assert isinstance(datagokr._classify(httpx.Response(200, text=xml05)), Unavailable)
 
 
 def test_datagokr_without_a_key_says_which_form(monkeypatch: pytest.MonkeyPatch) -> None:
