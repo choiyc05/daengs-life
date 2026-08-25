@@ -23,6 +23,8 @@
 - backend: FastAPI + uv (Python), LLM은 Gemini API 예정. **`backend/` 는 uv 프로젝트 하나**이고 그 안에 패키지가 다섯으로 나뉜다 (D-018 · D-027): `crawler/` 수집 · `rag/` 인덱싱(parse→chunk→embed→load→search) · `realtime/` 실시간 · `tasks/` Celery 워커·Beat · `app/` 서빙(controllers·services·dto). 의존 방향은 **app→{rag,realtime}→crawler** 한쪽뿐이고 `tests/test_import_direction*.py` 둘이 막는다 (방향 + **범위**).
   실행: `cd backend && uv run python -m crawler run --source <id>` / `uv run python -m rag parse`
 - 로컬 인프라: `docker compose up -d` — `db`(postgres+pgvector) · **`redis`**(D-001 브로커·캐시, RT-001 ④ 가 첫 사용처)
+  compose 프로젝트명은 `compose.yml` 에 `name: daengs-life` 로 **못 박혀 있다** — 안 박으면 워크트리마다
+  프로젝트가 갈라져 컨테이너가 두 벌이 된다 (`container_name` 이 같아서 이름만 보면 멀쩡해 보인다)
 - DB: postgres + **pgvector 0.8.6** — `documents` 테이블: `embedding vector(1024)`, `content_hash`(중복 방지 자연키), category CHECK(policy/travel/food), source_type CHECK(document/web/api/manual), source_url/document_title/section 컬럼 (조항 인용용) — D-008
 - 오케스트레이션: **Celery + Beat + Redis** (D-001 확정 — Airflow 아님)
 - frontend: Next.js (단순 확인용)

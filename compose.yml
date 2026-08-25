@@ -1,3 +1,11 @@
+# **프로젝트명을 못 박는다.** 안 박으면 compose 가 **디렉터리 이름**에서 가져오는데,
+# git worktree 로 병렬 작업을 하면(`feat/rag` · `feat/realtime`) 워크트리마다 프로젝트가
+# 따로 생겨 컨테이너가 갈라진다 — 실제로 2026-08-25 에 `db` 는 `daengs-life`,
+# `redis` 는 `feat-realtime` 프로젝트로 나뉘어 떴다 (`container_name` 은 고정돼 있어서
+# 이름만 보면 멀쩡해 보이는 것이 함정이다).
+# 이름을 고정하면 어느 워크트리에서 `docker compose up -d` 를 해도 같은 한 벌을 쓴다.
+name: daengs-life
+
 services:
   db:
     image: pgvector/pgvector:pg18
