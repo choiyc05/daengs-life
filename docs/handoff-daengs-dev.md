@@ -14,11 +14,11 @@
 | ① 제도·문서형 RAG | **1랩 관통 완료** — parse→chunk→embed→load→search→generate | `POST /ask` 가 답변+근거를 낸다. 검문소 ①③④ 통과 |
 | ② 실시간 산책 | **완료** | `GET /walk` 실서버 응답 5KB. 검문소 A~D 통과 |
 
-- 테스트: `cd backend && uv run pytest` → **수집 366개 중 365개 실행**(`slow` 1개는 `addopts = "-m 'not slow'"` 로 기본 제외).
-  **365 통과가 마지막 완주 기록**이다 (2026-08-25, DB 기동 상태). 저쪽에서 숫자가 다르면 `slow` 마커부터 의심할 것
-  > ⚠️ **DB 가 안 뜬 상태로 돌리면 멈춘 것처럼 보인다.** `psycopg.connect` 에 `connect_timeout` 이 없어
-  > (`rag/stages/load.py:122`) DB 테스트마다 TCP 타임아웃을 통째로 문다. `_conn_or_skip()` 은 **실패한 뒤에야** skip 한다.
-  > 2026-08-27 이 PC 에서 Docker 미기동으로 `test_load.py` 부근(48%)에서 사실상 정지 — 15분 타임아웃 3회.
+- 테스트: `cd backend && uv run pytest` → **365 통과 / 1 deselected, 35초** (2026-08-27 실측, `RAG-` 개명 후·DB 기동).
+  `slow`(임베딩 가중치 로드) 1개가 `addopts = "-m 'not slow'"` 로 빠진 것이 deselected 다 — 저쪽에서 숫자가 다르면 이것부터 의심할 것
+  > ⚠️ **DB 를 먼저 띄울 것. 안 띄우면 멈춘 것처럼 보인다.** `psycopg.connect` 에 `connect_timeout` 이 없어
+  > (`rag/stages/load.py:122`) DB 테스트마다 TCP 타임아웃을 통째로 문다 — `_conn_or_skip()` 은 **실패한 뒤에야** skip 한다.
+  > 같은 날 같은 PC 에서 **DB 기동 시 35초 / 미기동 시 `test_load.py` 부근(48%) 사실상 정지**(15분 타임아웃 3회)였다.
   > **저쪽은 DB 가 원격이라 더 자주 겪는다.** `dsn` 에 `connect_timeout=3` 을 넣는 것이 한 줄 처방이다
 - 코퍼스: 수집 **28건** → parsed 22 → 청크 **1,407** → `documents` **1,402행**(content 중복 5건 병합)
 - ⚠️ **끝난 게 아니다.** 시드 30개 중 **11개만 수집**했다. 남은 19개와 그 파서가 2랩이고, 그게 이관하는 이유다 (§5)

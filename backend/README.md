@@ -26,12 +26,13 @@ uv sync --group ml   # + torch·sentence-transformers (임베딩 단계)
 
 uv run fastapi run app/main.py   # POST /ask · GET /walk
 uv run fastapi dev app/main.py   # ⚠️ reload 기본 — 저장할 때마다 모델 로드 5~7초를 다시 문다 (RAG-028 ①)
-uv run pytest                    # 365 통과 (2026-08-25, DB 기동 상태). 수집 366 중 slow 1개 제외
+uv run pytest                    # 365 통과 / 1 deselected, 35초 (2026-08-27, DB 기동 상태)
 uv run pytest -m slow            # 임베딩 가중치를 실제로 로드하는 테스트 (기본 제외)
 ```
 
-- ⚠️ **DB 를 먼저 띄우고 테스트할 것.** `psycopg.connect` 에 `connect_timeout` 이 없어(`rag/stages/load.py:122`)
-  DB 가 없으면 `test_load.py` 부근에서 테스트마다 TCP 타임아웃을 물어 **멈춘 것처럼 보인다**
+- ⚠️ **DB 를 먼저 띄우고 테스트할 것** (`docker compose up -d db redis`). `psycopg.connect` 에 `connect_timeout` 이
+  없어(`rag/stages/load.py:122`) DB 가 없으면 `test_load.py` 부근에서 테스트마다 TCP 타임아웃을 물어
+  **멈춘 것처럼 보인다** — 같은 날 실측으로 **기동 35초 vs 미기동 15분+ 정지**
 - 의존성은 **반드시 `uv add` / `uv remove`** 로. `uv.lock` 은 커밋한다
 - `main.py` 는 **2줄 shim** 이다 (실물은 `app/main.py`). 이관 때 정리 대상
 - 파이프라인 전체 순서와 새 PC 복원 절차는 [`../docs/handoff-daengs-dev.md` §4](../docs/handoff-daengs-dev.md)
