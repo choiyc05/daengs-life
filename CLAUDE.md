@@ -17,8 +17,10 @@
   (앞으로 할 일의 명세). 브랜치 하나 = 기능 하나 = PR 하나
 - **태스크·P0/P1 의 단일 소스는 그 PR 본문 체크리스트**이고 md 에는 적지 않는다 —
   세션 시작 시 `gh pr view <브랜치의 PR>` 로 읽을 것. Projects 보드는 PR 이 여러 개가 되면 그때 (workflow.md §3)
-- 브랜치에서 작업 후 커밋+푸시. **`feat/realtime` 은 2026-08-25 `main` 에 머지됐다**(PR #2). 지금 살아 있는 브랜치는 `feat/rag` 하나 —
-  파트① 9단계(생성+`/ask`) 설계까지 끝났고 구현이 남았다. **머지로 `app/`·`realtime/`·`tasks/` 가 이 브랜치에 들어와 있다**
+- 브랜치에서 작업 후 커밋+푸시. **지금 살아 있는 브랜치는 없다 (2026-08-27).**
+  `feat/realtime`(PR #2, 8/25 머지) · `feat/rag`(PR #3, 1랩 `/ask` 까지 — 8/27 머지 후 삭제) 둘 다 `main` 에 들어왔고,
+  **`main` 하나에 `crawler/`·`rag/`·`realtime/`·`tasks/`·`app/` 이 전부 있다**
+- 다음 작업(2랩)은 **새 브랜치를 파고 PR 을 먼저 여는 것**부터다 — 열린 PR 이 없으니 지금은 읽을 체크리스트도 없다
 
 ## 스택
 - backend: FastAPI + uv (Python), LLM은 Gemini API 예정. **`backend/` 는 uv 프로젝트 하나**이고 그 안에 패키지가 다섯으로 나뉜다 (D-018 · D-027): `crawler/` 수집 · `rag/` 인덱싱(parse→chunk→embed→load→search) · `realtime/` 실시간 · `tasks/` Celery 워커·Beat · `app/` 서빙(controllers·services·dto). **`rag/` 안은 순서로 가른다**(D-023) — `pipeline.py`(순서의 단일 소스) · `core/`(config·io·ir) · `stages/`. 의존 방향은 **app→{rag,realtime}→crawler** 한쪽뿐이고 `tests/test_import_direction*.py` 둘이 막는다 (방향 + **범위**).
@@ -101,7 +103,7 @@
    ⓑ **골든셋이 Hit 을 과소평가한다** — easylaw 해설이 본문에 조항 번호를 담고 있어 실제로는 답인데 `must` 가 아니다.
    즉 `Hit@5=0.200` 은 "20%만 답한다"가 아니라 "법령 조문에 20%만 닿는다" (D-022 재검토 대기)
    실행: `uv run python -m rag search "질의"` / `--questions` (검증질문 7개 = 검문소③)
-9. **LLM 생성**(Gemini) + FastAPI `/ask` → (선택) Next.js  ← ✅ **1랩 완료 2026-08-25. 검문소④ 통과**
+9. **LLM 생성**(Gemini) + FastAPI `/ask` → (선택) Next.js  ← ✅ **1랩 완료 2026-08-25. 검문소④ 통과** (PR #3, 8/27 머지)
    **한 랩 = `/ask` 까지**(사용자, 2026-08-25). 그 뒤 **1단계 소스를 최대한 확장해 2랩**을 돈다 —
    그래서 1랩의 목표는 좋은 답이 아니라 **2랩과 비교 가능한 상태**다(D-028 ⑥ 답변 덤프)
    `app/` 배치는 **D-027**(controllers/services/dto/deps)을 따른다. 다만 **조립은 `rag.stages.generate.ask()` 가 소유한다** —
