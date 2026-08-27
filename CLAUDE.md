@@ -65,6 +65,8 @@
 - ⚠️ `data/` 는 미추적(D-017)이라 **PC 마다 상태가 다르다.** 새 PC 에서는 `backend/.env` 에 LAW_OC 를 넣고
   4소스(`easylaw-pet`·`law-animal-protection`·`law-livestock-epidemic`·`law-drf-api`)를 재수집 → `rag parse` 하면
   28건/22 parsed 가 복원된다 (2026-08-22 실제로 복원, 요소 수 동일 재현 확인)
+  ⚠️ 단 **재수집은 `chunk_id` 의 날짜를 바꾼다**(`...__20260819#note-1`) — parquet 3종과 `documents` 가 무효가 되어
+  embed 부터 다시 돈다. **PC 를 옮길 때는 재수집이 아니라 `data/` 통째 복사(32MB)가 정답이고, 둘을 섞는 게 가장 위험하다**
 
 ### RAG 관통 실행 순서
 1. ~~**D-004 확정**~~ ✅ 2026-08-20 — 질문 1~7 정답 위치를 원문에서 확인, 구조 기반 전략 + 판정표 확정
