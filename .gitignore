@@ -20,4 +20,7 @@ data/raw/*/*
 !data/raw/*/.gitkeep
 data/processed/*/*
 !data/processed/*/.gitkeep
+# 예외 — 랩 답변 덤프는 추적한다 (RAG-017 '예외' 절).
+# LLM 출력이라 다시 돌려도 같은 글이 안 나오는데 RAG-028 ⑥ 이 랩 비교 축으로 지정했다. 한 랩에 16KB.
+!data/processed/answers/*.jsonl
 data/manifests/crawl_log.jsonl
