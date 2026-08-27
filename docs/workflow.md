@@ -73,9 +73,9 @@
 | **작업이 섞이지 않았는지 확인** | PR 메시지 작성 |
 | **CSP 도구 선택** (종속성 판단) | 인프라 코드 생성 |
 
-이 레포의 `CLAUDE.md` 가 이미 같은 축을 갖고 있다 — **논의 → `docs/decisions.md` 기록 → 구현.**
+이 레포의 `CLAUDE.md` 가 이미 같은 축을 갖고 있다 — **논의 → `docs/decisions-rag.md` 기록 → 구현.**
 설계 결정(무엇을 왜)은 사람이 닫고, 그 결정을 코드로 옮기는 것은 AI 가 한다.
 
 ---
 
-관련: [decisions.md](decisions.md) — **기술** 설계 결정(ADR). 프로세스 규칙은 섞지 않는다.
+관련: [decisions-rag.md](decisions-rag.md) — **기술** 설계 결정(ADR). 프로세스 규칙은 섞지 않는다.

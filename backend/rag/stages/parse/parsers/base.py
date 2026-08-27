@@ -1,9 +1,9 @@
-"""파서 모듈이 구현해야 하는 최소 계약 (D-018 ②사이트 층).
+"""파서 모듈이 구현해야 하는 최소 계약 (RAG-018 ②사이트 층).
 
 모듈 하나 = 소스 하나. 노출하는 것은 셋뿐이다.
 
   NAME     : parsed 헤더에 남길 파서 이름
-  VERSION  : 파서를 고쳐 재파싱이 필요해지면 올린다 (D-006 이 "구버전으로 처리된 문서" 를 고를 근거)
+  VERSION  : 파서를 고쳐 재파싱이 필요해지면 올린다 (RAG-006 이 "구버전으로 처리된 문서" 를 고를 근거)
   parse()  : 원본 바이트 + meta → Parsed
 
 받기·저장·스킵 판단은 `rag/core/io.py` 와 CLI 가 한다. 파서는 **그 사이트의 구조만** 안다.
@@ -27,7 +27,7 @@ class Parsed:
     elements: list[AnyElement]
     document_title: str | None = None
     published_at: str | None = None
-    citation_url: str | None = None          # 답변에 실을 링크 (D-019). None 이면 source_url 을 쓴다
+    citation_url: str | None = None          # 답변에 실을 링크 (RAG-019). None 이면 source_url 을 쓴다
     counts: dict[str, int] = field(default_factory=dict)   # 파서만 아는 수치 (제외한 서식 수 등)
     warnings: list[str] = field(default_factory=list)
     extra: dict[str, Any] = field(default_factory=dict)

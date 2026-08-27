@@ -1,9 +1,9 @@
-"""파이프라인의 단계와 순서 — **순서의 단일 소스** (D-023).
+"""파이프라인의 단계와 순서 — **순서의 단일 소스** (RAG-023).
 
 순서를 파일 이름에 박지 않은 이유가 여기 있다. `s3_chunk.py` 로 하면 목록만 봐도 순서가 보이지만,
-**단계 번호는 계획이지 불변 식별자가 아니다** — D-003(하이브리드·리랭커)이 확정되면 8·9단계
+**단계 번호는 계획이지 불변 식별자가 아니다** — RAG-003(하이브리드·리랭커)이 확정되면 8·9단계
 사이에 끼어들고 그 순간 뒤 파일이 전부 개명된다. 바뀌는 값은 이름이 아니라 여기 리스트에 둔다.
-(D-022 ⑥B 가 `chunk_id` 에서 수집 날짜를 뺀 것과 같은 판단이다.)
+(RAG-022 ⑥B 가 `chunk_id` 에서 수집 날짜를 뺀 것과 같은 판단이다.)
 
 **`stages/` 에 있으면 여기 한 줄이 있어야 하고, `core/` 에 있으면 없어야 한다.** 그 둘이
 "파이프라인의 한 단계인가"의 판정이다.
@@ -30,23 +30,23 @@ class Stage:
 
 STAGES: list[Stage] = [
     Stage("parse", 2, "원본 → 공통 IR",
-          consumes="data/raw/", produces="processed/parsed/", adr="D-018·D-019"),
+          consumes="data/raw/", produces="processed/parsed/", adr="RAG-018·RAG-019"),
     Stage("chunk", 3, "IR → 검색 단위 청크",
-          consumes="processed/parsed/", produces="processed/chunks/", adr="D-004·D-021"),
+          consumes="processed/parsed/", produces="processed/chunks/", adr="RAG-004·RAG-021"),
     Stage("embed", 4, "청크 → 벡터 (모델 3종)",
-          consumes="processed/chunks/", produces="processed/embeddings/", adr="D-002"),
+          consumes="processed/chunks/", produces="processed/embeddings/", adr="RAG-002"),
     Stage("goldenset", 5, "채점 기준표 15문항",
-          consumes="processed/chunks/", produces="rag/stages/goldenset.yaml", adr="D-022"),
+          consumes="processed/chunks/", produces="rag/stages/goldenset.yaml", adr="RAG-022"),
     Stage("evaluate", 6, "3파전 채점 · 승자 1종 선정",
-          consumes="processed/embeddings/", produces="processed/eval/", adr="D-024"),
+          consumes="processed/embeddings/", produces="processed/eval/", adr="RAG-024"),
     Stage("load", 7, "청크+벡터 → documents 적재",
-          consumes="processed/embeddings/", produces="postgres documents", adr="D-008·D-025"),
+          consumes="processed/embeddings/", produces="postgres documents", adr="RAG-008·RAG-025"),
     Stage("search", 8, "dense 검색 (검문소③)",
-          consumes="postgres documents", produces="stdout", adr="D-026"),
-    # D-003 이 확정되면 search 와 generate 사이에 한 줄이 는다. 파일명은 안 바뀐다 —
-    # 그때 고칠 곳이 하나여야 해서 조립 순서를 `generate.ask()` 가 소유한다 (D-028 ③).
+          consumes="postgres documents", produces="stdout", adr="RAG-026"),
+    # RAG-003 이 확정되면 search 와 generate 사이에 한 줄이 는다. 파일명은 안 바뀐다 —
+    # 그때 고칠 곳이 하나여야 해서 조립 순서를 `generate.ask()` 가 소유한다 (RAG-028 ③).
     Stage("generate", 9, "검색 위에 Gemini 로 답 생성 (검문소④)",
-          consumes="postgres documents", produces="processed/answers/", adr="D-028"),
+          consumes="postgres documents", produces="processed/answers/", adr="RAG-028"),
 ]
 
 BY_KEY: dict[str, Stage] = {s.key: s for s in STAGES}

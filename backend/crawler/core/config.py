@@ -1,12 +1,12 @@
 """설정·경로·공통 상수.
 
-값은 `pydantic-settings` 로 읽는다 (D-015). 우선순위는 **실제 환경변수 > backend/.env > 루트 .env**.
+값은 `pydantic-settings` 로 읽는다 (RAG-015). 우선순위는 **실제 환경변수 > backend/.env > 루트 .env**.
 두 env 파일은 병합된다 — 루트에만 있는 값도 그대로 올라오고, 양쪽에 있으면 backend 쪽이 이긴다.
 배포에서는 오케스트레이터가 넣은 환경변수가 항상 이기므로 파일이 하나도 없어도 동작한다.
 
 `crawler` 는 자기 Settings 를 가진다. app 이 생기면 app 이 같은 `backend/.env` 를 자기 Settings 로
 읽는다 — 공유 Settings 를 만들면 크롤러가 `DATABASE_URL`·`GEMINI_API_KEY` 까지 알게 되어
-`app → crawler` 한 방향(D-009)이 흐려진다.
+`app → crawler` 한 방향(RAG-009)이 흐려진다.
 """
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ def _find_repo_root(start: Path) -> Path | None:
     """data/manifests/seed_sources.yaml 이 보이는 곳까지 위로 올라간다. 없으면 None.
 
     없다고 예외를 내면 안 된다 — 백엔드 이미지에는 data/ 가 없고, app 이 crawler 를 import 하므로
-    (D-009) import 시점에 터지면 컨테이너가 아예 뜨지 않는다. 데이터가 정말 필요한 시점에
+    (RAG-009) import 시점에 터지면 컨테이너가 아예 뜨지 않는다. 데이터가 정말 필요한 시점에
     require_data_dir() 이 안내와 함께 실패한다.
     """
     for p in [start, *start.parents]:
@@ -119,7 +119,7 @@ def redact(url: str | None) -> str | None:
     """URL 에 박힌 API 키를 *** 로 가린다.
 
     API 소스는 키를 쿼리스트링에 넣는데, 그 URL 이 `.meta.json` 의 source_url 로 들어가고
-    meta 는 git 에 커밋된다(D-008). 저장·로그·화면 출력 직전에 반드시 통과시킨다.
+    meta 는 git 에 커밋된다(RAG-008). 저장·로그·화면 출력 직전에 반드시 통과시킨다.
 
     파라미터 이름으로 한 번, 발급받은 값 자체로 한 번 — 두 겹으로 지운다.
     이름을 모르는 새 API 가 와도 값 매칭이 받아내고, 값이 짧아 값 매칭을 못 쓰면 이름이 받아낸다.

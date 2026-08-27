@@ -1,11 +1,11 @@
 """반대 방향 가드 — `rag`·`realtime` 이 `crawler` 를 **어디까지** 참조하는가 (RT-001 ①-2).
 
 `test_import_direction.py` 는 `crawler/` 만 훑어서 "crawler 가 위를 부르지 않는다"만 본다.
-방향은 그것으로 지켜지지만 **범위**는 아무도 안 본다. D-018 의 "`rag` 가 `crawler` 를 참조하는
+방향은 그것으로 지켜지지만 **범위**는 아무도 안 본다. RAG-018 의 "`rag` 가 `crawler` 를 참조하는
 것은 경로 탐색 하나뿐"은 지금까지 문서에만 있는 규칙이었다.
 
 범위가 왜 방향만큼 중요한가 — realtime 이 `Fetcher`·`store`·`seed_sources` 를 끌어오는 순간
-**"실시간은 저장하지 않는다"**(`data/README.md` §5, D-012)가 흐려진다. realtime 은 크롤 대상이
+**"실시간은 저장하지 않는다"**(`data/README.md` §5, RAG-012)가 흐려진다. realtime 은 크롤 대상이
 아니고 `.meta.json` 도 만들지 않는다. 캐시하는 것은 측정소 목록 같은 정적 메타뿐이다.
 
 **허용 목록은 패키지마다 다르다.** 하나로 뭉뚱그려 넓히면 realtime 을 좁힌 이유가 같이 사라진다.
@@ -13,7 +13,7 @@
 파일을 나눈 이유 — `feat/rag` 와 `feat/realtime` 이 병렬이라 `test_import_direction.py` 를
 양쪽이 고치면 충돌한다. 저기서는 `FORBIDDEN` 한 줄만 늘리고 새 검사는 여기로 뺐다.
 
-검사는 `rglob` 로 훑으므로 **패키지 내부 배치와 무관하다** — D-023 이 `rag/` 를
+검사는 `rglob` 로 훑으므로 **패키지 내부 배치와 무관하다** — RAG-023 이 `rag/` 를
 `core/`+`stages/` 로 재배치해도 여기는 안 고친다.
 """
 from __future__ import annotations
@@ -27,18 +27,18 @@ BACKEND = Path(__file__).resolve().parents[1]
 
 # 패키지 → `crawler` 안에서 import 해도 되는 모듈. 여기 없으면 실패한다.
 ALLOWED: dict[str, set[str]] = {
-    # 경로 탐색(D-018·D-014) + 「법령」 조항 인용 파싱. 후자는 의도된 확장이다 —
+    # 경로 탐색(RAG-018·RAG-014) + 「법령」 조항 인용 파싱. 후자는 의도된 확장이다 —
     # `cites()` 에 허위 인용 19건을 잡아낸 규칙이 들어 있어 복사하면 그 지식이 갈라진다
     # (`rag/README.md` 설계 메모).
     "rag": {"crawler.core.config", "crawler.core.textutil"},
     # 경로 탐색 하나뿐 (RT-001 ①-2). `textutil` 은 한국 법령 문서용이라 realtime 이 쓸 일이
     # 없고, 목록이 갈려 있어야 그게 새로 들어오는 날 여기서 잡힌다.
     "realtime": {"crawler.core.config"},
-    # Celery 워커·Beat (D-009 의 형제 패키지). **realtime 과 같은 폭으로 좁힌다**
+    # Celery 워커·Beat (RAG-009 의 형제 패키지). **realtime 과 같은 폭으로 좁힌다**
     # (RT-002 ②-b) — 넓히면 워커가 `store`·`Fetcher` 를 끌고 들어와 "실시간은 저장하지
     # 않는다"가 웹이 아니라 워커 쪽에서 조용히 뚫린다.
     "tasks": {"crawler.core.config"},
-    # 서빙 (D-027). `app` 은 도메인 패키지를 통해 설정에 닿으므로 직접 쓸 일이 거의 없다.
+    # 서빙 (RAG-027). `app` 은 도메인 패키지를 통해 설정에 닿으므로 직접 쓸 일이 거의 없다.
     # 그래도 목록에 두는 이유는 **새로 들어오는 날 잡히게** 하기 위해서다.
     "app": {"crawler.core.config"},
 }
@@ -126,7 +126,7 @@ def test_the_allowed_prefix_rule_does_not_leak() -> None:
         assert got is expected, target
 
 
-# --------------------------------------------- 컨트롤러에 로직을 넣지 않는다 (D-027)
+# --------------------------------------------- 컨트롤러에 로직을 넣지 않는다 (RAG-027)
 
 # 컨트롤러가 **불러도 되는** 도메인 모듈. 타입과 값 객체뿐이고, 판정·조회는 없다.
 CONTROLLER_MAY_IMPORT = {"realtime.geo", "realtime.cache", "realtime.config"}
@@ -148,7 +148,7 @@ def _imports(path: Path) -> list[tuple[int, str]]:
 
 
 def test_controllers_call_services_not_the_domain() -> None:
-    """**D-027 의 유일한 강제 규칙**을 기계가 지킨다 — 컨트롤러에 로직 0줄.
+    """**RAG-027 의 유일한 강제 규칙**을 기계가 지킨다 — 컨트롤러에 로직 0줄.
 
     말로 두면 반드시 새어 나온다. "여기서 한 줄만" 이 쌓이면 서비스 층이 빈 껍데기가 되고,
     그 순간 이 구조는 이름만 MVC2 가 된다. 판정·조회 모듈을 import 하는 것을 금지하면
@@ -172,6 +172,6 @@ def test_controllers_call_services_not_the_domain() -> None:
                 violations.append(f"{path.relative_to(BACKEND)}:{lineno} imports {target!r}")
 
     assert not violations, (
-        "컨트롤러가 도메인을 직접 부른다 (D-027 — 로직은 `app/services/` 에): "
+        "컨트롤러가 도메인을 직접 부른다 (RAG-027 — 로직은 `app/services/` 에): "
         + " · ".join(violations)
         + f"  |  허용: {', '.join(sorted(CONTROLLER_MAY_IMPORT))}")

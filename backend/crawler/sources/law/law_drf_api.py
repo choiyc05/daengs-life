@@ -3,9 +3,9 @@
   목록: lawSearch.do?OC={OC}&target=law&type=XML&query={법령명}   → 법령ID 찾기
   본문: lawService.do?OC={OC}&target=law&type=XML&ID={법령ID}     → 조문 단위 XML
 
-D-011 에서 웹 원문(`law-animal-protection` 등)을 정식 경로로 확정했고 이 소스는 그것을 대체하지 않는다.
+RAG-011 에서 웹 원문(`law-animal-protection` 등)을 정식 경로로 확정했고 이 소스는 그것을 대체하지 않는다.
 역할이 다르다 — 웹은 **사람이 열 수 있는 출처 링크**(답변에 그대로 싣는다, KPI), API 는 **조문 경계가
-태그로 확정된 구조화 데이터**(청킹·`section` 채우기, D-004). 둘 다 두고 청킹 단계에서 API 쪽을 쓴다.
+태그로 확정된 구조화 데이터**(청킹·`section` 채우기, RAG-004). 둘 다 두고 청킹 단계에서 API 쪽을 쓴다.
 
 규격 검증 (2026-08-20) — 법제처 공식 매뉴얼이 공개한 샘플 키 `OC=test` 로 실제 응답을 받아 확인했다.
   검색 `lawSearch.do` : <LawSearch><resultCode>00</resultCode><law><법령명한글>(CDATA)</법령명한글>
@@ -18,15 +18,15 @@ D-011 에서 웹 원문(`law-animal-protection` 등)을 정식 경로로 확정�
   - `조문여부`가 `전문`인 단위는 장·절 제목("제1장 총칙")이다. 조 수는 `조문`만 센다
   - 항·호·목의 내용에는 번호가 이미 붙어 있다(`① …`, `1. …`) — 따로 조립할 필요 없다
   - 검색의 `법령ID`(000412)로 본문을 부르면 현행 시행본이 온다.
-    `법령일련번호`(287795)는 D-011 에서 웹 껍데기로 얻은 `lsiSeq` 와 같은 값이다
+    `법령일련번호`(287795)는 RAG-011 에서 웹 껍데기로 얻은 `lsiSeq` 와 같은 값이다
   - 웹 원문에 없던 **별표·서식이 `<별표단위>` 로 오고 HWP/PDF 파일 링크가 들어 있다**
     (`<별표서식파일링크>` 를 https://www.law.go.kr 뒤에 붙이면 내려받아진다).
-    D-011 에서 미해결로 남긴 "과태료 부과기준 별표" 문제의 답이 여기 있다
+    RAG-011 에서 미해결로 남긴 "과태료 부과기준 별표" 문제의 답이 여기 있다
 
 ⚠️ 아직 안 해본 것 — 이 소스로 **실제 수집(run)을 돌린 적은 없다.** `OC=test` 는 규격 확인용 공용
    샘플 키라 파이프라인에 쓰지 않는다. 본인 OC 를 넣고 `--dry-run` 후 다음을 확인할 것:
      1. `.meta.json` 의 source_url 에 OC 가 *** 로 가려졌는지  ← 반드시 눈으로
-     2. 응답 바이트가 호출마다 같은지. xml 은 지문이 원본 바이트 해시라(D-009),
+     2. 응답 바이트가 호출마다 같은지. xml 은 지문이 원본 바이트 해시라(RAG-009),
         응답에 타임스탬프 같은 게 섞이면 매번 CHANGED 가 뜬다. 그러면 지문을 text 기준으로 바꾼다
 
 OC 발급 — open.law.go.kr 에서 신청하면 즉시 나온다. IP/도메인 등록은 **필수가 아니다**
@@ -172,7 +172,7 @@ class LawDrfApi(Source):
                 if law_id:
                     return {
                         "law_id": law_id,
-                        # 웹 원문(D-011)의 lsiSeq 와 같은 값이라 두 소스를 맞춰 볼 수 있다
+                        # 웹 원문(RAG-011)의 lsiSeq 와 같은 값이라 두 소스를 맞춰 볼 수 있다
                         "law_serial": _text(law, "법령일련번호"),
                         "published_at": _ymd(_text(law, "시행일자")),
                     }
@@ -225,19 +225,19 @@ class LawDrfApi(Source):
                                 if (f := u.find("조문여부")) is not None and f.get_text(strip=True) == "조문")
         extra["units"] = len(units)
 
-        # 부칙 — 시행일과 경과규정이 들어 있다. 웹 원문(D-011)도 본문에 포함하므로 맞춘다.
+        # 부칙 — 시행일과 경과규정이 들어 있다. 웹 원문(RAG-011)도 본문에 포함하므로 맞춘다.
         addenda = soup.find_all("부칙단위")
         extra["addenda"] = len(addenda)
         lines += [t for el in addenda if (t := el.get_text("\n", strip=True))]
 
-        # 별표·서식 — **내용이 통째로 들어 있다** (`별표내용`). D-011 에서 웹 원문의 미해결로
+        # 별표·서식 — **내용이 통째로 들어 있다** (`별표내용`). RAG-011 에서 웹 원문의 미해결로
         # 남겨 둔 "과태료 부과기준 별표" 문제의 답이 여기다. 웹 HTML 에는 제목과 파일 링크뿐이었다.
         # 시행규칙은 별표가 80개고 서식 양식이 대부분이라 본문 대비 비중이 크다.
         tables = soup.find_all("별표단위")
         extra["attachments"] = len(tables)
         lines += [t for el in tables if (t := el.get_text("\n", strip=True))]
 
-        # 조문키/조문번호는 D-004 의 section 후보다. 원본 XML 을 그대로 저장하므로
+        # 조문키/조문번호는 RAG-004 의 section 후보다. 원본 XML 을 그대로 저장하므로
         # 여기서는 개수만 남기고 실제 section 부여는 파싱 단계에서 한다.
         text = textutil.squeeze("\n".join(lines))
         return Extracted(title=title, text=text, published_at=published,

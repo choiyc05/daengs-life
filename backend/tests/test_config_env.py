@@ -1,4 +1,4 @@
-"""설정 로딩 규칙 (D-015) — 우선순위, 파싱, 마스킹, 레포 밖 실행.
+"""설정 로딩 규칙 (RAG-015) — 우선순위, 파싱, 마스킹, 레포 밖 실행.
 
 config 는 import 시점에 값을 확정하므로, 테스트는 Settings 를 직접 만들어 같은 규칙을 확인한다
 (모듈을 reload 하면 다른 테스트가 잡고 있는 config.* 참조가 어긋난다).
@@ -40,7 +40,7 @@ def test_real_env_beats_env_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 
 
 def test_parses_inline_comment_and_export_prefix(tmp_path: Path) -> None:
-    """손으로 짠 파서가 조용히 틀리던 두 가지 (D-015)."""
+    """손으로 짠 파서가 조용히 틀리던 두 가지 (RAG-015)."""
     backend = tmp_path / "backend.env"
     backend.write_text(
         "LAW_OC=abc123 # 2026-08-20 발급\n"
@@ -75,5 +75,5 @@ def test_require_data_dir_explains_what_to_set(monkeypatch: pytest.MonkeyPatch) 
 
 
 def test_repo_root_is_optional_so_import_survives_outside_the_repo(tmp_path: Path) -> None:
-    """백엔드 이미지에는 data/ 가 없다. 여기서 예외가 나면 컨테이너가 안 뜬다 (D-014)."""
+    """백엔드 이미지에는 data/ 가 없다. 여기서 예외가 나면 컨테이너가 안 뜬다 (RAG-014)."""
     assert config._find_repo_root(tmp_path) is None

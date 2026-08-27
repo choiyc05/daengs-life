@@ -10,7 +10,7 @@ GPS ──geo──▶ 조회 키(격자·측정소·행정동) ──providers�
 ## 이 패키지가 crawler 를 안 닮는 지점
 
 **저장하지 않는다.** 10분 뒤면 틀릴 값을 벡터로 박아두면 계속 오답을 뱉는다
-(`data/README.md` §5, D-012). 그래서 크롤러 소스 모듈도 `.meta.json` 도 생기지 않는다.
+(`data/README.md` §5, RAG-012). 그래서 크롤러 소스 모듈도 `.meta.json` 도 생기지 않는다.
 `data/reference/` 에 두는 것은 측정소 목록 같은 **월 1회 갱신 정적 메타뿐**이다.
 
 ## 배치 — 층을 전송/소스로 가른다 (RT-001 ①)
@@ -45,8 +45,8 @@ realtime/
 └── cache.yaml        ✅ 발표 주기 11종 — **④-b 실측에서 유도.** 비인용 숫자 셋은 `우리 선택`
 ```
 
-프리페치(④-d)는 `realtime` 밖에 있다 — `backend/tasks/` 의 Celery Beat 다 (D-009 · RT-002 ②-b).
-**여기서 Celery 를 알면 `python -m realtime walk` 가 브로커 없이는 안 돈다** (D-001 원칙 1).
+프리페치(④-d)는 `realtime` 밖에 있다 — `backend/tasks/` 의 Celery Beat 다 (RAG-009 · RT-002 ②-b).
+**여기서 Celery 를 알면 `python -m realtime walk` 가 브로커 없이는 안 돈다** (RAG-001 원칙 1).
 그래서 태스크가 아는 것은 스케줄과 예산 판단뿐이고, 데우는 일은 `collect.warm` 이 한다 —
 요청 경로와 **같은 함수**라 프리페치만 조용히 낡는 일이 없다.
 
@@ -69,7 +69,7 @@ N 은 `providers/` 7개이고 걔들이 공유하는 것은 이미 `transport/` 
 
 `rag` 는 허용이 둘(`config` + `textutil`)이라 목록이 패키지별로 갈려 있다. `tasks`·`app` 도 같은 폭으로 등재돼 있다.
 
-서빙 층(`app/`)의 안쪽 배치는 **D-027** 이다 — 파트①의 `/ask` 와 공유하는 결정이라 `RT-` 가 아니라 `D-` 다.
+서빙 층(`app/`)의 안쪽 배치는 **RAG-027** 이다 — 파트①의 `/ask` 와 공유하는 결정이라 `RT-` 가 아니라 `RAG-` 다.
 `app/controllers/` 가 `realtime.rules`·`realtime.collect` 를 import 하는 것을 가드가 막는다: **로직은 `app/services/` 에.**
 
 ## 실행

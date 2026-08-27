@@ -1,11 +1,11 @@
-"""3단계 청커 — `parsed/` → `chunks/` (D-021).
+"""3단계 청커 — `parsed/` → `chunks/` (RAG-021).
 
-**타입 기반 단일 청커다** (D-021 ①). 파서는 소스마다 갈랐지만(D-018) 청커는 그러지 않는다 —
-D-004 판정표가 전부 "요소 타입만 보면 되는" 규칙이고, 그 `article` 이 어느 사이트에서 왔는지 알
+**타입 기반 단일 청커다** (RAG-021 ①). 파서는 소스마다 갈랐지만(RAG-018) 청커는 그러지 않는다 —
+RAG-004 판정표가 전부 "요소 타입만 보면 되는" 규칙이고, 그 `article` 이 어느 사이트에서 왔는지 알
 필요가 없다. IR 6종을 고정한 목적이 이것이다. **새 소스가 들어와도 이 파일에 분기가 생기면 안 된다.**
 생긴다면 IR 이 그 소스를 못 담고 있다는 신호이고 고칠 곳은 파서다.
 
-조립 규칙은 D-021 ③ 이다. 요약하면 **캡션 + 본문**이고, 캡션에 무엇을 넣을지는
+조립 규칙은 RAG-021 ③ 이다. 요약하면 **캡션 + 본문**이고, 캡션에 무엇을 넣을지는
 "청크를 떼어놓고 봤을 때 사용자 질의에 들어갈 말이 텍스트 안에 있는가" 로 정했다.
 법령 조문 375개 중 자기 법령명이 본문에 등장하는 것이 **0건**이라 문서 제목은 전 타입에 붙는다.
 """
@@ -25,7 +25,7 @@ VERSION = 1
 
 # ---------------------------------------------------------------- 임계값 (전부 ADR 소관)
 MAX_CHARS = 7_500        # ② 하드 상한. 넘으면 조용히 자르지 않고 실패시킨다
-SOFT_CHARS = 2_000       # D-004 기준③. 넘어도 막지 않고 경고만 — ④ 가 폴백을 두지 않기로 했다
+SOFT_CHARS = 2_000       # RAG-004 기준③. 넘어도 막지 않고 경고만 — ④ 가 폴백을 두지 않기로 했다
 TABLE_WHOLE = 1_000      # ③(나) 표 전체가 이 이하면 통짜, 넘으면 논리 행 단위
 
 _ART = re.compile(r"(?m)^제(\d+(?:조의\d+|조))\(")           # 부칙 안의 조 경계
@@ -56,7 +56,7 @@ def _doc_fields(head: dict) -> dict:
     """청크 행마다 복제되는 문서 수준 값 (⑤A — 행 하나가 자기완결적이다)."""
     return {
         "doc_id": head["doc_id"],
-        # D-025 ④ — `source`(기관명)는 documents.source 컬럼이 기다리는 값이고,
+        # RAG-025 ④ — `source`(기관명)는 documents.source 컬럼이 기다리는 값이고,
         # `source_id` 는 여기 없어서 청커가 헤더를 들고 다니고 있었다(⑤A 가 없애려던 모양)
         "source": head.get("source", ""),
         "source_id": head.get("source_id", ""),
@@ -102,7 +102,7 @@ def _article(el: dict, base: dict, title: str) -> list[Chunk]:
         return [_make(base, chunk_id=el["id"], content=full, section=section,
                       citation=f"{title} {section}".strip(), element=el)]
 
-    # 2,000자 이상 — 항 두문 + 그 항의 모든 호 = 1청크. **호 단위 분할은 금지**다 (D-004):
+    # 2,000자 이상 — 항 두문 + 그 항의 모든 호 = 1청크. **호 단위 분할은 금지**다 (RAG-004):
     # 금액이 항 두문에만 있고 호에는 없어서, 호로 쪼개면 과태료 금액이 사라진다.
     out: list[Chunk] = []
     for i, para in enumerate(paras, start=1):
@@ -181,7 +181,7 @@ def _table(el: dict, base: dict, title: str, dropped: Counter) -> list[Chunk]:
     rows = [r for r in (el.get("rows") or []) if any(c.strip() for c in r)]
     if header and all(not h.strip() for h in header):
         # 헤더가 전무하면 표가 아니라 레이아웃이다 — 세어 보니 9건 전부 서식이었다 (④ 에서 발견).
-        # D-004 가 서식 126건을 뺀 것과 같은 종류다.
+        # RAG-004 가 서식 126건을 뺀 것과 같은 종류다.
         dropped["표: 헤더 전무(서식)"] += 1
         return []
     if not rows:
@@ -201,7 +201,7 @@ def _table(el: dict, base: dict, title: str, dropped: Counter) -> list[Chunk]:
         return [_make(base, chunk_id=el["id"], content="\n".join(lines), section=section,
                       citation=f"{title} {section}".strip(), element=el)]
 
-    # 논리 행 단위 — 헤더와 값을 짝지어야 `20` 이 20원인지 20만원인지 알 수 있다 (D-004).
+    # 논리 행 단위 — 헤더와 값을 짝지어야 `20` 이 20원인지 20만원인지 알 수 있다 (RAG-004).
     # 헤더줄+값줄(B안)이 아니라 `헤더: 값`(A안)인 이유는 길이가 아니라 **거리**다 —
     # 질문 1 이 이 행과 만나려면 `과태료` 가 `20` 옆에 있어야 한다.
     out: list[Chunk] = []
@@ -242,7 +242,7 @@ def _qa(el: dict, base: dict) -> list[Chunk]:
     질의어가 아니고, 10건이 캡션 5종을 나눠 써서 서로 비슷해진다.
 
     **대신 `related_laws` 를 본문에 넣는다.** qa 10건 중 본문에 법령명이 있는 것이 2건뿐이라,
-    조문에서 법령명 복원율이 0% 였던 것과 같은 병리다. D-004 판정표의 "관련법령은 메타로" 를
+    조문에서 법령명 복원율이 0% 였던 것과 같은 병리다. RAG-004 판정표의 "관련법령은 메타로" 를
     정정한 것이고, 9단계 답변이 인용할 조항 번호가 텍스트 안에 있게 된다.
     """
     lines = [el["question"], el["answer"]]
@@ -288,7 +288,7 @@ def chunk_doc(rows: list[dict]) -> Chunked:
             res.chunks += _qa(el, base)
         elif t == "heading":
             if not is_easylaw:
-                continue      # 법령의 장·절은 경계로만 쓴다 (D-004). 조문이 이미 법령명을 갖는다
+                continue      # 법령의 장·절은 경계로만 쓴다 (RAG-004). 조문이 이미 법령명을 갖는다
             flush()
             if el.get("level") == 1:
                 h1, h2 = el["text"], None
@@ -321,9 +321,9 @@ def chunk_doc(rows: list[dict]) -> Chunked:
         if c.chars > MAX_CHARS:
             raise ValueError(f"{c.chunk_id}: {c.chars}자 — ② 하드 상한 {MAX_CHARS} 초과")
         if c.chars > SOFT_CHARS:
-            # ④ 는 폴백을 두지 않기로 했다. 막지 않고 드러낸다 — D-006 EDA 재료이자
+            # ④ 는 폴백을 두지 않기로 했다. 막지 않고 드러낸다 — RAG-006 EDA 재료이자
             # 새 소스에서 초과가 늘면 ④ 를 재개할 트리거다
-            res.warnings.append(f"{c.chunk_id}: {c.chars}자 (D-004 {SOFT_CHARS}자 초과)")
+            res.warnings.append(f"{c.chunk_id}: {c.chars}자 (RAG-004 {SOFT_CHARS}자 초과)")
     return res
 
 

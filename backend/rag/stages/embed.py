@@ -1,14 +1,14 @@
-"""4단계 임베딩 — `chunks/` → `embeddings/{key}.parquet` (D-002, D-021 ②).
+"""4단계 임베딩 — `chunks/` → `embeddings/{key}.parquet` (RAG-002, RAG-021 ②).
 
-**DB 밖에서 오프라인으로 만든다** (D-002). 6단계 베이크오프가 7단계 적재보다 먼저이므로, 세 모델의
+**DB 밖에서 오프라인으로 만든다** (RAG-002). 6단계 베이크오프가 7단계 적재보다 먼저이므로, 세 모델의
 벡터가 DB 에 들어가기 전에 파일로 나란히 존재해야 비교할 수 있다. `documents.embedding` 은 한 컬럼이라
 모델을 섞을 수 없다.
 
-**청크 한 벌을 세 모델이 공유한다.** D-021 ② 가 문자 기준으로 자르기로 한 이유가 이것이다 —
+**청크 한 벌을 세 모델이 공유한다.** RAG-021 ② 가 문자 기준으로 자르기로 한 이유가 이것이다 —
 어느 토크나이저로 자르면 그 모델에 맞춰진 청크가 되어 3파전이 오염된다. 같은 이유로 **각 모델의
 공식 프롬프트는 그대로 쓴다**(아래 `MODELS`). 우리 도메인에 맞게 손보면 그 모델만 튜닝을 받는 셈이다.
 
-토큰은 자르는 자가 아니라 **가드**다. D-004 기준④(임베딩 입력 한계)가 실제로 집행되는 자리가 여기고,
+토큰은 자르는 자가 아니라 **가드**다. RAG-004 기준④(임베딩 입력 한계)가 실제로 집행되는 자리가 여기고,
 한계를 넘으면 **조용히 잘리게 두지 않고 실패시킨다.**
 """
 from __future__ import annotations
@@ -22,7 +22,7 @@ from typing import Any
 from ..core import config, io
 
 VERSION = 1
-DIM = 1024                # D-002 — 세 모델 모두 1024 native. 다르면 비교 자체가 성립하지 않는다
+DIM = 1024                # RAG-002 — 세 모델 모두 1024 native. 다르면 비교 자체가 성립하지 않는다
 
 
 @dataclass(frozen=True)
@@ -33,7 +33,7 @@ class Model:
     6단계에서 질의를 프롬프트 없이 넣게 되고, Qwen3 를 자기 설계와 다르게 쓰면서 점수를 매기게 된다.
     """
     key: str              # 파일명·CLI 인자 (슬래시를 파일명에 쓸 수 없다)
-    repo: str             # 정식 식별자 — `documents.metadata.embedding_model` 에 이 값이 간다 (D-008)
+    repo: str             # 정식 식별자 — `documents.metadata.embedding_model` 에 이 값이 간다 (RAG-008)
     max_tokens: int       # 실측: sentence_bert_config.json / config.json 의 한계
     query_prompt: str = ""
     doc_prompt: str = ""
@@ -54,7 +54,7 @@ MODELS: dict[str, Model] = {
 def load_chunks() -> list[dict[str, Any]]:
     """청크를 **파일 경계 없이** 전부 이어 붙인다.
 
-    D-021 ⑤A 가 청크 행을 자기완결적으로 만든 이유가 이것이다 — 여기서 헤더를 들고 다닐 필요가 없다.
+    RAG-021 ⑤A 가 청크 행을 자기완결적으로 만든 이유가 이것이다 — 여기서 헤더를 들고 다닐 필요가 없다.
     """
     rows: list[dict[str, Any]] = []
     for path in io.chunk_files():
@@ -62,22 +62,22 @@ def load_chunks() -> list[dict[str, Any]]:
     return rows
 
 
-FINGERPRINT_VERSION = 2   # 1 = 청크 파일 해시 / 2 = (chunk_id, content) 쌍 (D-025 ⑤)
+FINGERPRINT_VERSION = 2   # 1 = 청크 파일 해시 / 2 = (chunk_id, content) 쌍 (RAG-025 ⑤)
 
 
 def chunks_fingerprint() -> str:
-    """**임베딩이 실제로 의존하는 것만** 해싱한다 — `chunk_id` 와 `content` (D-025 ⑤).
+    """**임베딩이 실제로 의존하는 것만** 해싱한다 — `chunk_id` 와 `content` (RAG-025 ⑤).
 
     v1 은 청크 *파일* 해시를 이어 붙였다. 그러면 `source` 같은 메타 필드를 한 줄 더할 때마다
     벡터가 무효화되어 1,407청크를 세 모델로 다시 인코딩해야 한다 — **`content` 는 한 글자도
-    안 바뀌는데 같은 숫자를 수십 분에 걸쳐 다시 만드는 것이다.** 실제로 D-025 ④(파서·청커에
+    안 바뀌는데 같은 숫자를 수십 분에 걸쳐 다시 만드는 것이다.** 실제로 RAG-025 ④(파서·청커에
     `source` 싣기)에서 그 대가가 드러나 정의를 좁혔다.
 
     **`chunk_id` 를 함께 넣는 이유** — `content` 만 보면 재수집으로 날짜가 바뀌어 `chunk_id` 가
     달라져도 지문이 같게 나오고, parquet 의 행과 청크가 어긋난 채 "최신"으로 통과한다.
     지문은 "임베딩이 의존하는 것 전부"여야 하고 행의 주소도 거기 포함된다.
 
-    D-001 원칙 2(상류 해시를 하류 헤더에 적어 비교)를 부정하는 것이 아니라 **정밀화**다.
+    RAG-001 원칙 2(상류 해시를 하류 헤더에 적어 비교)를 부정하는 것이 아니라 **정밀화**다.
     축은 그대로이고 "상류 산출물"의 정의가 파일에서 **임베딩 입력**으로 좁아졌다.
     """
     h = hashlib.sha256()
@@ -91,7 +91,7 @@ def chunks_fingerprint() -> str:
     return h.hexdigest()
 
 
-# ---------------------------------------------------------------- 토큰 가드 (D-021 ②)
+# ---------------------------------------------------------------- 토큰 가드 (RAG-021 ②)
 def token_stats(model: Model, texts: list[str]) -> dict[str, int]:
     """모델의 토크나이저로 재기만 한다. 가중치를 로드하지 않으므로 인코딩 전에 싸게 실패할 수 있다."""
     from transformers import AutoTokenizer
@@ -113,14 +113,14 @@ def guard(model: Model, texts: list[str]) -> dict[str, int]:
     if stats["over"]:
         raise ValueError(
             f"{model.repo}: 입력 한계 {model.max_tokens} 토큰을 넘는 청크 {stats['over']}건 "
-            f"(최대 {stats['max']}). 잘라서 넘기지 않는다 — D-021 ② 는 여기서 실패시키기로 했다"
+            f"(최대 {stats['max']}). 잘라서 넘기지 않는다 — RAG-021 ② 는 여기서 실패시키기로 했다"
         )
     return stats
 
 
 # ---------------------------------------------------------------- 인코딩
 def load_model(model: Model, device: str | None = None):
-    """`device` 를 주면 그대로 쓴다 — **서빙은 CPU 로 고정한다** (D-028 ①).
+    """`device` 를 주면 그대로 쓴다 — **서빙은 CPU 로 고정한다** (RAG-028 ①).
 
     자동 선택을 두되 강제할 수 있게 한 이유: 배치(4·6단계)는 GPU 가 필요하지만 서빙은 질의 하나라
     CPU 로 124ms 면 끝나고, 서버가 2.3GB 를 물고 있으면 2랩에서 새 소스를 임베딩할 때 6GB 중
@@ -133,7 +133,7 @@ def load_model(model: Model, device: str | None = None):
 
     device = device or ("cuda" if torch.cuda.is_available() else "cpu")
     # fp32 를 쓴다. 1,407건이라 fp16 의 속도 이득이 의미 없고, 3파전 점수 차이를 정밀도 차이로
-    # 오염시키지 않는다 — D-021 ② 가 문자 기준을 택한 것과 같은 논리다
+    # 오염시키지 않는다 — RAG-021 ② 가 문자 기준을 택한 것과 같은 논리다
     return SentenceTransformer(model.repo, device=device)
 
 
@@ -201,7 +201,7 @@ def write_parquet(model: Model, rows: list[dict[str, Any]], vectors, *,
 
     `content` 를 넣지 않는다 — 세 파일에 3번 복제되고, 6단계는 `chunk_id` 로 chunks 에서 조회하면 된다.
     모델 정식 식별자는 **파일 메타데이터**에 적는다. 파일명은 사람이 읽고(슬래시를 못 쓴다),
-    `documents.metadata.embedding_model` 에 갈 값은 기계가 읽는다 (D-008).
+    `documents.metadata.embedding_model` 에 갈 값은 기계가 읽는다 (RAG-008).
     """
     import numpy as np
     import pyarrow as pa
@@ -259,14 +259,14 @@ def is_current(key: str, fingerprint: str) -> bool:
 
 
 def restamp(key: str, fingerprint: str, rows: list[dict[str, Any]]) -> tuple[bool, str]:
-    """벡터는 그대로 두고 **파일 메타데이터의 지문만** 다시 찍는다 (D-025 ⑤의 일회성 대가).
+    """벡터는 그대로 두고 **파일 메타데이터의 지문만** 다시 찍는다 (RAG-025 ⑤의 일회성 대가).
 
     지문 *정의*가 바뀌면 기존 parquet 에 적힌 값은 옛 방식이라 그대로는 stale 이다. 그렇다고
     같은 벡터를 다시 만드는 것은 낭비라 메타만 갱신한다.
 
     **다만 이 함수는 낡음을 덮는 도구가 되기 쉽다.** 그래서 찍기 전에 확인한다 —
     `chunk_id` 목록이 **순서까지** 같고 `chars` 도 같아야 한다. parquet 에 `content` 자체는
-    없으므로(D-002 가 중복 저장을 피했다) `chars` 가 내용 동일성의 대리 검사다. 하나라도
+    없으므로(RAG-002 가 중복 저장을 피했다) `chars` 가 내용 동일성의 대리 검사다. 하나라도
     어긋나면 찍지 않고 이유를 돌려준다 — 그때는 진짜로 다시 인코딩해야 하는 상황이다.
     """
     import pyarrow.parquet as pq

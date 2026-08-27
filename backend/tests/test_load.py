@@ -1,11 +1,11 @@
-"""7단계 적재 테스트 — 계약과 규칙을 본다 (D-008, D-025).
+"""7단계 적재 테스트 — 계약과 규칙을 본다 (RAG-008, RAG-025).
 
 **두 층으로 나눈다.** `prepare()` 는 DB 없이 검사할 수 있고(그래서 `parse_doc` 처럼 쓰기를
-분리해 뒀다), 연결이 필요한 것은 DB 가 없으면 skip 한다 — `data/` 가 미추적이듯(D-017)
+분리해 뒀다), 연결이 필요한 것은 DB 가 없으면 skip 한다 — `data/` 가 미추적이듯(RAG-017)
 컨테이너도 항상 떠 있지는 않다.
 
 **여기서 지키는 것 중 가장 중요한 하나는 `metadata.embedding_model` 이 "실제로 쓴 모델"이라는
-것이다.** 지금 적재는 판정 승자(`qwen3`)가 아니라 기준선(`bge-m3`)으로 도는데(D-024 `판정 이후`),
+것이다.** 지금 적재는 판정 승자(`qwen3`)가 아니라 기준선(`bge-m3`)으로 도는데(RAG-024 `판정 이후`),
 그 둘이 어긋나면 DB 안의 벡터가 무엇으로 만들어졌는지를 아무도 못 믿게 된다.
 """
 from __future__ import annotations
@@ -26,7 +26,7 @@ def _prepared_or_skip(key: str = "bge-m3"):
     return load.prepare(key)
 
 
-# ---------------------------------------------------------------- 기본값 = 결정 (D-024 판정 이후)
+# ---------------------------------------------------------------- 기본값 = 결정 (RAG-024 판정 이후)
 def test_default_model_is_the_baseline_not_the_winner() -> None:
     """첫 관통은 기준선으로 간다. **판정을 뒤집는 게 아니라 판정과 다르게 운영하는 것**이다.
 
@@ -39,7 +39,7 @@ def test_default_model_is_the_baseline_not_the_winner() -> None:
 
 # ---------------------------------------------------------------- prepare (DB 없이)
 def test_content_hash_is_sha256_of_content() -> None:
-    """`content_hash` 는 `content` 의 SHA-256 이다 — `documents` 의 자연키(D-008)."""
+    """`content_hash` 는 `content` 의 SHA-256 이다 — `documents` 의 자연키(RAG-008)."""
     p = _prepared_or_skip()
     row = p.rows[0]
     assert row["content_hash"] == hashlib.sha256(row["content"].encode()).hexdigest()
@@ -53,7 +53,7 @@ def test_rows_are_chunks_minus_merged() -> None:
 
 
 def test_merged_chunk_ids_survive_in_metadata() -> None:
-    """D-025 ③ — 합쳐진 주소가 **DB 안에** 남는다. 로그를 놓쳐도 되짚을 수 있어야 한다."""
+    """RAG-025 ③ — 합쳐진 주소가 **DB 안에** 남는다. 로그를 놓쳐도 되짚을 수 있어야 한다."""
     p = _prepared_or_skip()
     merged_rows = [r for r in p.rows if r["metadata"]["merged_from"]]
     assert sum(len(r["metadata"]["merged_from"]) for r in merged_rows) == p.merged
@@ -70,7 +70,7 @@ def test_content_hash_is_unique_per_row() -> None:
 
 
 def test_embedding_model_is_what_was_actually_used() -> None:
-    """**판정 승자가 아니라 실제로 쓴 모델**을 적는다 (D-008, D-024 판정 이후).
+    """**판정 승자가 아니라 실제로 쓴 모델**을 적는다 (RAG-008, RAG-024 판정 이후).
 
     DB 안의 벡터가 무엇으로 만들어졌는지는 사실의 문제지 계획의 문제가 아니다.
     """
@@ -96,7 +96,7 @@ def test_kpi_fields_reach_metadata() -> None:
 
 
 def test_source_reaches_the_column() -> None:
-    """D-025 ④ — `.meta.json` 의 기관명이 파서·청커를 거쳐 `documents.source` 까지 온다.
+    """RAG-025 ④ — `.meta.json` 의 기관명이 파서·청커를 거쳐 `documents.source` 까지 온다.
 
     이 값은 원래 두 층에서 조용히 빠져 있었다. 다시 빠지면 여기서 깨진다.
     """
@@ -107,7 +107,7 @@ def test_source_reaches_the_column() -> None:
 
 
 def test_vector_is_1024_and_normalized() -> None:
-    """D-002 — 세 모델 모두 1024 native. 정규화되어 있어야 `<=>` 가 곧 코사인이다."""
+    """RAG-002 — 세 모델 모두 1024 native. 정규화되어 있어야 `<=>` 가 곧 코사인이다."""
     import numpy as np
 
     p = _prepared_or_skip()
@@ -142,7 +142,7 @@ def test_loaded_rows_match_prepared() -> None:
 
 
 def test_one_model_in_the_column() -> None:
-    """**D-002 — 한 컬럼에 모델 혼입 금지.** 한 트랜잭션으로 넣는 이유가 이것이다.
+    """**RAG-002 — 한 컬럼에 모델 혼입 금지.** 한 트랜잭션으로 넣는 이유가 이것이다.
 
     둘 이상 보이면 적재가 중간에 죽었거나 트랜잭션이 풀린 것이다.
     """
@@ -154,9 +154,9 @@ def test_one_model_in_the_column() -> None:
 
 
 def test_upsert_is_idempotent() -> None:
-    """같은 명령을 다시 돌려도 행이 늘지 않는다 — `content_hash` 가 자연키다 (D-008).
+    """같은 명령을 다시 돌려도 행이 늘지 않는다 — `content_hash` 가 자연키다 (RAG-008).
 
-    D-025 ① 이 `DO NOTHING` 을 버린 이유는 이것 때문이 **아니다**(그건 교체 때문이다).
+    RAG-025 ① 이 `DO NOTHING` 을 버린 이유는 이것 때문이 **아니다**(그건 교체 때문이다).
     여기서 보는 것은 중복 방지가 여전히 살아 있다는 것이다.
     """
     p = _prepared_or_skip()

@@ -1,4 +1,4 @@
-"""공통 중간 표현(IR) — 모든 파서가 지켜야 할 계약 (D-018).
+"""공통 중간 표현(IR) — 모든 파서가 지켜야 할 계약 (RAG-018).
 
 파서는 소스마다 다르다. 다른 것이 정상이고, 그 차이를 `parsers/{domain}/{id}.py` 파일 하나에
 가둔다. **폭발을 막는 실제 장치는 파서 개수 통제가 아니라 산출물 모양의 고정**이다 —
@@ -29,7 +29,7 @@ class _Base(BaseModel):
 
 
 # ---------------------------------------------------------------- 조문 내부 구조
-# 항 두문에만 금액이 있고 호에는 없다 (D-004). 계층을 살려 두어야 청커가 "항 두문 + 그 항의
+# 항 두문에만 금액이 있고 호에는 없다 (RAG-004). 계층을 살려 두어야 청커가 "항 두문 + 그 항의
 # 모든 호" 를 한 청크로 만들 수 있다. 평평한 텍스트로 뭉개면 그 조립이 불가능해진다.
 class SubItem(_Base):
     """목 — 가. 나. 다."""
@@ -54,7 +54,7 @@ class Paragraph(_Base):
 
 # ---------------------------------------------------------------- 요소 6종
 class _Element(_Base):
-    id: str                                   # doc_id#섹션 — 청크 id 의 근간 (D-019)
+    id: str                                   # doc_id#섹션 — 청크 id 의 근간 (RAG-019)
     citation_url: str | None = None           # 있으면 문서 헤더보다 우선 (조문 딥링크 여지)
 
 
@@ -64,7 +64,7 @@ class Article(_Element):
     title: str | None = None
     head: str                                 # 제15조(등록대상동물의 등록 등)
     paragraphs: list[Paragraph] = []
-    chars: int = 0                            # 청커의 2,000자 판정 입력 (D-004)
+    chars: int = 0                            # 청커의 2,000자 판정 입력 (RAG-004)
     key: str | None = None                    # 원본 조문키 — 역추적용
     effective_date: str | None = None
 
@@ -92,7 +92,7 @@ class Table(_Element):
     type: Literal["table"] = "table"
     title: str
     section: str | None = None                # 별표 4
-    unit: str | None = None                   # (단위: 만원) — 표 전체에 한 번만 나온다 (D-004)
+    unit: str | None = None                   # (단위: 만원) — 표 전체에 한 번만 나온다 (RAG-004)
     header: list[str] = []
     rows: list[list[str]] = []
     related: str | None = None                # (제35조 관련)
@@ -131,8 +131,8 @@ class Document(_Base):
     source_id: str
     domain: str
 
-    # 콘텐츠 생성 주체(기관명). `.meta.json` 에 있는데 D-019 가 필드 목록에서 빠뜨렸다 —
-    # `documents.source` 컬럼이 이 값을 기다린다 (D-025 ④). 옛 parsed 를 읽을 수 있게 기본값을 둔다
+    # 콘텐츠 생성 주체(기관명). `.meta.json` 에 있는데 RAG-019 가 필드 목록에서 빠뜨렸다 —
+    # `documents.source` 컬럼이 이 값을 기다린다 (RAG-025 ④). 옛 parsed 를 읽을 수 있게 기본값을 둔다
     source: str = ""
     category: str
     subcategory: str
@@ -144,12 +144,12 @@ class Document(_Base):
     published_at: str | None = None
 
     # source_url = 원본을 받은 곳(API 주소는 키가 마스킹돼 사람이 못 연다)
-    # citation_url = 답변에 실을 링크. 둘을 나누지 않으면 그 if 가 청커·적재기·앱 세 층에 복제된다 (D-019)
+    # citation_url = 답변에 실을 링크. 둘을 나누지 않으면 그 if 가 청커·적재기·앱 세 층에 복제된다 (RAG-019)
     source_url: str | None = None
     citation_url: str | None = None
 
     raw_file: str
-    raw_sha256: str                           # meta 의 sha256 — 재파싱 스킵 판단 (D-019)
+    raw_sha256: str                           # meta 의 sha256 — 재파싱 스킵 판단 (RAG-019)
     indexable: bool = True
 
     parser: str
@@ -157,28 +157,28 @@ class Document(_Base):
     parsed_at: str
     counts: dict[str, int] = {}
     warnings: list[str] = []
-    # 파서만 아는 부가정보(공포일자·소관부처 등). documents 컬럼이 아니라 역추적·EDA(D-006)용이라
+    # 파서만 아는 부가정보(공포일자·소관부처 등). documents 컬럼이 아니라 역추적·EDA(RAG-006)용이라
     # 스키마를 강제하지 않는다.
     extra: dict[str, str | None] = {}
 
 
-# ---------------------------------------------------------------- 청크 (3단계 산출물, D-021 ⑤)
+# ---------------------------------------------------------------- 청크 (3단계 산출물, RAG-021 ⑤)
 class Chunk(_Base):
-    """`chunks/*.jsonl` 의 한 줄. **행 하나가 자기완결적이다** (D-021 ⑤A).
+    """`chunks/*.jsonl` 의 한 줄. **행 하나가 자기완결적이다** (RAG-021 ⑤A).
 
-    D-019 는 parsed 에서 문서 수준 값을 헤더에 몰았고 근거는 "`citation_url` 분기가 세 층에
+    RAG-019 는 parsed 에서 문서 수준 값을 헤더에 몰았고 근거는 "`citation_url` 분기가 세 층에
     복제된다" 였다. 청크 단계에서는 그 분기가 이미 파서에서 끝나 값만 물려받으므로 같은 근거가
     성립하지 않는다. 반대로 하류 세 층(임베더·평가·적재기)이 전부 **파일 경계 없이** 읽기 때문에
     헤더에 두면 그 세 층이 헤더를 들고 다녀야 한다.
     """
     type: Literal["chunk"] = "chunk"
 
-    # ----- documents 컬럼에 1:1 로 꽂히는 것 (D-008)
+    # ----- documents 컬럼에 1:1 로 꽂히는 것 (RAG-008)
     chunk_id: str                             # → metadata.chunk_id. 골든셋(5단계)이 정답을 가리키는 주소
     content: str                              # → content. 임베딩 입력이 되는 텍스트 그대로
-    section: str | None = None                # → section. 제15조제2항 / 별표 4 (D-019 §3)
+    section: str | None = None                # → section. 제15조제2항 / 별표 4 (RAG-019 §3)
     document_title: str                       # → document_title
-    source: str = ""                          # → source. 콘텐츠 생성 주체(기관명) — D-025 ④
+    source: str = ""                          # → source. 콘텐츠 생성 주체(기관명) — RAG-025 ④
     source_url: str | None = None             # → source_url (원본을 받은 곳)
     category: str = ""
     subcategory: str = ""
@@ -190,15 +190,15 @@ class Chunk(_Base):
     trust_level: str = ""
     published_at: str | None = None
     license: str = ""
-    citation_url: str | None = None           # 답변에 실을 링크. source_url 과 다르다 (D-019 §4)
+    citation_url: str | None = None           # 답변에 실을 링크. source_url 과 다르다 (RAG-019 §4)
 
     # ----- 우리만 쓰는 것
-    citation: str = ""                        # 사람이 읽을 인용 문자열. chunk_id 와 겸하지 않는다 (D-021 ⑤B)
+    citation: str = ""                        # 사람이 읽을 인용 문자열. chunk_id 와 겸하지 않는다 (RAG-021 ⑤B)
     doc_id: str = ""
-    source_id: str = ""                       # 크롤러 소스 계약 id (D-009). → metadata.source_id
+    source_id: str = ""                       # 크롤러 소스 계약 id (RAG-009). → metadata.source_id
     element_id: str = ""                      # 이 청크가 나온 IR 요소 — 역추적용
     element_type: str = ""
-    part: str | None = None                   # "supplementary" = 부칙 (D-021 ①). 6단계에서 필터로 끌 자리
+    part: str | None = None                   # "supplementary" = 부칙 (RAG-021 ①). 6단계에서 필터로 끌 자리
     chars: int = 0
 
 
@@ -206,7 +206,7 @@ class ChunkSet(_Base):
     """`chunks/*.jsonl` 의 첫 줄. **파일 수준 사실만** 담는다 — 문서 수준 값은 청크 행에 있다.
 
     `parsed_sha256` 은 재청킹 스킵 판단용이다. 크롤러의 `sha256` → parsed 의 `raw_sha256` →
-    여기의 `parsed_sha256` 으로 같은 축이 한 단계 더 연장된다 (D-001 원칙 2).
+    여기의 `parsed_sha256` 으로 같은 축이 한 단계 더 연장된다 (RAG-001 원칙 2).
     """
     type: Literal["chunkset"] = "chunkset"
     doc_id: str

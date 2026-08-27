@@ -6,7 +6,7 @@
 
 **표기**
 - 체크박스 = **수집 완료 여부** (실제 기록은 `data/manifests/crawl_log.jsonl`, 여기는 사람이 보는 요약)
-- `id` = seed yaml 의 id, 크롤러 모듈은 `backend/crawler/sources/{domain}/{id}.py` (`-` → `_`, D-012)
+- `id` = seed yaml 의 id, 크롤러 모듈은 `backend/crawler/sources/{domain}/{id}.py` (`-` → `_`, RAG-012)
 - ✅확인 = 2026-08-19 URL·제공여부 검증 완료 · ⚠️요확인 = 경로 변동 가능 (수집 전 URL 재확인 필요)
 - 🔑 = 키 필요 (§9 발급 체크리스트)
 
@@ -30,7 +30,7 @@
 **병목 3가지**
 1. 키 미발급 — `DATA_GO_KR_KEY` 3건(+실시간 5건). `LAW_OC` 는 발급 완료 (§9)
 2. ⚠️요확인 9건 — 운송약관 4 · 보험 3 · 접종 2. `easylaw-pet` 도 `verified` 였는데 실제 URL 이 죽어 있었음 → **수집 착수 전 URL 확인을 기본 절차로** (§10)
-3. PDF 파서 미정 — `pdf-entry` 7건(운송약관·보험약관)은 파싱 전략(D-004) 확정 후
+3. PDF 파서 미정 — `pdf-entry` 7건(운송약관·보험약관)은 파싱 전략(RAG-004) 확정 후
 
 ---
 
@@ -38,17 +38,17 @@
 
 > "출처 링크 + 조항 번호 인용" 이 KPI 이므로 법령은 **조문 단위**로 수집한다.
 > 웹 원문과 API 를 **둘 다** 둔다 — 웹은 사람이 열 수 있는 출처 링크(답변에 그대로 싣는다),
-> API 는 조문 경계가 태그로 확정된 구조화 데이터(청킹·`section`). D-011 · D-016.
+> API 는 조문 경계가 태그로 확정된 구조화 데이터(청킹·`section`). RAG-011 · RAG-016.
 
 - [x] **`easylaw-pet`** — 법제처 생활법령 "반려동물과 생활하기" · `html` · 키없음 · ✅확인
-      → **2026-08-19 수집 완료: 본문 7 + 100문100답 7 = 14건** ([D-009](decisions.md))
+      → **2026-08-19 수집 완료: 본문 7 + 100문100답 7 = 14건** ([RAG-009](decisions-rag.md))
 - [x] **`law-animal-protection`** — 동물보호법 / 시행령 / 시행규칙 웹 원문 · `html` · 키없음 · ✅확인
-      → **2026-08-20 수집 완료: 3건** (조문 103 + 45 + 79) ([D-011](decisions.md))
+      → **2026-08-20 수집 완료: 3건** (조문 103 + 45 + 79) ([RAG-011](decisions-rag.md))
 - [x] **`law-livestock-epidemic`** — 가축전염병 예방법 / 시행령 / 시행규칙 · `html` · 키없음 · ✅확인
       → **2026-08-20 수집 완료: 3건** (조문 95 + 33 + 97). 요확인이었던 URL 검증도 이때 해소
 - [x] **`law-drf-api`** — 국가법령정보 공동활용 Open API (lawSearch / lawService) · `api` · 🔑`LAW_OC` · ✅확인
       → **2026-08-20 수집 완료: 8건** (동물보호법 3종 + 가축전염병 예방법 3종 + 수의사법 + 자연공원법).
-      조문 단위 XML + **별표 본문 포함** ([D-016](decisions.md))
+      조문 단위 XML + **별표 본문 포함** ([RAG-016](decisions-rag.md))
 
 ### 수집 대상 법령
 
@@ -65,12 +65,12 @@
 - 목록: `http://www.law.go.kr/DRF/lawSearch.do?OC={OC}&target=law&type=XML&query=동물보호법`
 - 본문: `http://www.law.go.kr/DRF/lawService.do?OC={OC}&target=law&type=XML&ID={법령ID}` — 조문 단위 XML
 - `target`: `law`(법령) / `ordin`(자치법규) / `admrul`(행정규칙) / `expc`(법령해석례) / `licbyl`(별표·서식)
-- 청킹: XML 조문 구조를 그대로 청크 경계로 → `documents.section` 에 `제16조제2항` 형식 저장 (D-004)
+- 청킹: XML 조문 구조를 그대로 청크 경계로 → `documents.section` 에 `제16조제2항` 형식 저장 (RAG-004)
 - 웹 원문 URL 은 한글 패턴: `https://www.law.go.kr/법령/동물보호법`
 - ⚠️ 시행규칙 조문 번호는 개정으로 변동 → 수집 시점의 **시행일자를 meta 에 기록**, 항상 최신본 재수집
 
 ### `easylaw-pet` 이 중요한 이유
-[생활법령정보 "반려동물과 생활하기"](https://www.easylaw.go.kr/CSP/CnpClsMain.laf?csmSeq=1809&ccfNo=1&cciNo=1&cnpClsNo=1) 는 등록·외출(목줄/입마개)·대중교통·사육관리를 **법령 근거와 함께 해설**한다. 조문+해설이 한 문서에 있어 청킹 품질이 좋고 정적 HTML 이라 크롤 난도 최하 → Phase 1 최우선이었고 실제로 첫 수집 대상이 됐다. trust_level 은 `official`(해설), 인용 조문은 `law`. 100문100답 탭은 Q/A + 관련법령 구조라 **D-007 골든셋 재료**로 쓴다. 카드뉴스는 이미지라 제외.
+[생활법령정보 "반려동물과 생활하기"](https://www.easylaw.go.kr/CSP/CnpClsMain.laf?csmSeq=1809&ccfNo=1&cciNo=1&cnpClsNo=1) 는 등록·외출(목줄/입마개)·대중교통·사육관리를 **법령 근거와 함께 해설**한다. 조문+해설이 한 문서에 있어 청킹 품질이 좋고 정적 HTML 이라 크롤 난도 최하 → Phase 1 최우선이었고 실제로 첫 수집 대상이 됐다. trust_level 은 `official`(해설), 인용 조문은 `law`. 100문100답 탭은 Q/A + 관련법령 구조라 **RAG-007 골든셋 재료**로 쓴다. 카드뉴스는 이미지라 제외.
 
 ---
 
@@ -282,7 +282,7 @@
 - [ ] `insurer-terms-pdfs` — 보험 약관 PDF
 - [ ] 운송약관 4건 (`korail` / `srt` / `seoulmetro` / `airlines`)
 
-### Phase 3 — 지속 운영 (Celery Beat, D-001)
+### Phase 3 — 지속 운영 (Celery Beat, RAG-001)
 - [ ] `seoul-notice-api` 고시공고 모니터링 — 신규 지원사업 탐지
 - [ ] 법령 개정 체크 — 시행일자 비교
 - [ ] 약관 개정 체크 — 분기 1회
@@ -294,4 +294,4 @@
 - robots.txt 준수, 요청 간격 1~2초(현재 크롤러 기본 1.5s), UA 에 연락처 명시
 - 공공저작물은 대부분 **공공누리 제1유형(출처표시)** — 페이지별 유형을 `.meta.json` 에 기록
 - 약관·항공사 안내는 사실정보 위주라 내부 RAG 활용은 무리 없으나, **서비스 표출 시 출처 표기 필수** (KPI 와도 일치)
-- 원본은 git 미추적, `.meta.json` 필수, meta 없으면 인덱싱 금지 — [D-008](decisions.md)
+- 원본은 git 미추적, `.meta.json` 필수, meta 없으면 인덱싱 금지 — [RAG-008](decisions-rag.md)

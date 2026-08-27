@@ -1,4 +1,4 @@
-"""`GET /walk` — ⑥ 응답 계약과 저하 경로 (RT-001 ⑥ · D-027, 구현 계획 9).
+"""`GET /walk` — ⑥ 응답 계약과 저하 경로 (RT-001 ⑥ · RAG-027, 구현 계획 9).
 
 **검문소 D 를 한 층 위에서 다시 본다.** `test_collect.py` 는 실패가 판정까지 흘러가는지를
 봤고, 여기는 그 판정이 **HTTP 계약으로 정직하게 나오는지**를 본다 — 죽은 축이 응답에서
@@ -68,7 +68,7 @@ def wired(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture
 def client(wired) -> TestClient:
-    """캐시와 시계를 갈아끼운 앱. **`deps.py` 가 있는 이유가 이것이다** (D-027)."""
+    """캐시와 시계를 갈아끼운 앱. **`deps.py` 가 있는 이유가 이것이다** (RAG-027)."""
     app = create_app()
     app.dependency_overrides[get_cache] = lambda: Cache(MemoryStore())
     app.dependency_overrides[get_now] = lambda: NOW
@@ -228,7 +228,7 @@ def test_the_root_route_still_answers(client) -> None:
 
 
 def test_the_shim_exposes_the_same_app() -> None:
-    """`fastapi dev main.py` 가 계속 도는지 (D-027 — 완전 이동은 병합 뒤로)."""
+    """`fastapi dev main.py` 가 계속 도는지 (RAG-027 — 완전 이동은 병합 뒤로)."""
     import main
 
     assert main.app.title == "강아지 AI 생활 비서"

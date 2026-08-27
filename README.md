@@ -17,7 +17,7 @@
 
 - **`POST /ask`** — 질문 → 검색 5건 → Gemini 생성 → 답변 + 근거(출처 링크·조항)
 - **`GET /walk?lat=&lon=`** — `서초2동 (측정소: 강남대로) 기준` 같은 판정 + T+24h 타임라인 + 권장 산책 구간
-- 코퍼스 **28건 수집 → 1,407청크 → `documents` 1,402행** · 테스트 **304 통과 / 3 skip**
+- 코퍼스 **28건 수집 → 1,407청크 → `documents` 1,402행** · 테스트 **365 통과** (2026-08-25, DB 기동 상태)
 - ⚠️ **완성이 아니다.** 시드 30개 중 11개만 수집했고, 남은 19개와 그 파서(특히 **PDF 파서 없음**)가 2랩이다
 
 ## 실행
@@ -33,7 +33,7 @@ uv run pytest
 인덱싱 파이프라인(수집→parse→chunk→embed→load→search→generate)과 새 PC 복원 절차는
 **[docs/handoff-daengs-dev.md §4](docs/handoff-daengs-dev.md)** 에 명령까지 그대로 있다.
 
-⚠️ **`data/` 는 통째로 git 미추적**이라 PC 마다 상태가 다르다 (D-017). 클론만으로는 코퍼스가 없다.
+⚠️ **`data/` 는 통째로 git 미추적**이라 PC 마다 상태가 다르다 (RAG-017). 클론만으로는 코퍼스가 없다.
 
 ## 구성
 
@@ -42,8 +42,8 @@ uv run pytest
 | `backend/crawler/` | 수집 — 소스별 크롤러 |
 | `backend/rag/` | 인덱싱 — `pipeline.py`(순서의 단일 소스) · `core/` · `stages/`(parse→chunk→embed→load→search→generate) |
 | `backend/realtime/` | 실시간 — `transport/` 3 · `providers/` 7 · `collect` · `rules` · `cache` |
-| `backend/tasks/` | Celery 워커 · Beat (D-001) |
-| `backend/app/` | 서빙 — `controllers` · `services` · `dto` · `deps` (D-027, **컨트롤러에 로직 0줄**) |
+| `backend/tasks/` | Celery 워커 · Beat (RAG-001) |
+| `backend/app/` | 서빙 — `controllers` · `services` · `dto` · `deps` (RAG-027, **컨트롤러에 로직 0줄**) |
 | `db/init/` | 최초 기동 스키마. `indexes.sql` 은 적재 후 수동 |
 | `frontend/` | Next.js — 단순 확인용 |
 
@@ -55,15 +55,15 @@ uv run pytest
 |---|---|
 | [docs/handoff-daengs-dev.md](docs/handoff-daengs-dev.md) | **이관 노트** — 충돌 11개 · 안 따라가는 것 · 복원 절차 · 남은 일 |
 | [docs/README.md](docs/README.md) | 문서 인덱스 |
-| [docs/decisions.md](docs/decisions.md) | 설계 결정 (`D-`) — 공통·파트① |
+| [docs/decisions-rag.md](docs/decisions-rag.md) | 설계 결정 (`RAG-`) — 공통·파트① |
 | [docs/decisions-realtime.md](docs/decisions-realtime.md) | 설계 결정 (`RT-`) — 파트② |
 | [docs/data-sources.md](docs/data-sources.md) | 데이터 소스 조사 · 수집 체크리스트 · 키 발급처 |
 | [docs/realtime-apis.md](docs/realtime-apis.md) | 실시간 API + GPS 정밀도 결론 (§6 실측이 최신) |
 | [docs/workflow.md](docs/workflow.md) | 작업 방식 — 우선순위 · PR 을 작업 **전에** 올리는 규칙 |
 | [data/README.md](data/README.md) | 수집 데이터 저장 규칙 (`.meta.json` 필수) |
 
-**ADR 번호는 파트별로 파일이 갈린다** — 공통·파트① = `decisions.md` 의 `D-` / 파트② = `decisions-realtime.md` 의 `RT-`.
-⚠️ 이 `D-` 는 **DAENGS_dev 의 `D-` 와 다른 계보**다 (이관 노트 §3-1).
+**ADR 번호는 파트별로 파일이 갈린다** — 공통·파트① = `decisions-rag.md` 의 `RAG-` / 파트② = `decisions-realtime.md` 의 `RT-`.
+⚠️ 접두사는 2026-08-27 에 `D-` → `RAG-` 로 바꿨다 — **DAENGS_dev 가 `D-` 를 이미 쓰기 때문**이다 (이관 노트 §3-1). 번호는 그대로다.
 
 ## 스택
 

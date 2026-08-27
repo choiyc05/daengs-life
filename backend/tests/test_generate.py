@@ -1,11 +1,11 @@
-"""9단계 생성 (D-028).
+"""9단계 생성 (RAG-028).
 
 **Gemini 도 DB 도 부르지 않는다.** `answer()` 를 순수하게 만든 이유가 이것이다 — 프롬프트 조립과
 검문소④ 산식은 손으로 만든 `Hit` 몇 개로 검증할 수 있어야 하고, 그러려면 네트워크가 필요한
 부분이 한 군데(`client`)로 몰려 있어야 한다.
 
 `tests/test_evaluate.py` 가 그랬듯 **여기가 붙잡는 것은 숫자가 아니라 규칙**이다. 특히 `ask()` 가
-넘겨받은 자원을 닫지 않는다는 것(D-028 ①)은 서버가 두 번째 요청에서 죽느냐 마느냐의 문제다.
+넘겨받은 자원을 닫지 않는다는 것(RAG-028 ①)은 서버가 두 번째 요청에서 죽느냐 마느냐의 문제다.
 """
 from __future__ import annotations
 
@@ -46,7 +46,7 @@ class FakeClient:
         return FakeResponse(self.text)
 
 
-# ---------------------------------------------------------------- 프롬프트 (D-028 ②)
+# ---------------------------------------------------------------- 프롬프트 (RAG-028 ②)
 def test_context_carries_the_whole_content() -> None:
     """**본문을 자르지 않는다.**
 
@@ -59,7 +59,7 @@ def test_context_carries_the_whole_content() -> None:
 
 
 def test_prompt_asks_for_articles_but_never_for_refusal() -> None:
-    """조항 인용은 **요구하고**(KPI), 거부는 **부탁하지 않는다**(D-029 가 그 자리다).
+    """조항 인용은 **요구하고**(KPI), 거부는 **부탁하지 않는다**(RAG-029 가 그 자리다).
 
     1랩의 목적은 근거가 없을 때 모델이 무엇을 하는지 보는 것이라, 방어 문구를 넣으면 관찰하려던
     것을 지운다. 나중에 누가 "모르면 모른다고 하세요" 를 슬쩍 넣으면 여기서 깨진다.
@@ -102,7 +102,7 @@ def test_citation_inside_the_body_counts_as_grounded() -> None:
     assert generate.ungrounded_articles("제101조에 따라", HITS) == []
 
 
-# ---------------------------------------------------------------- 수명 규약 (D-028 ①)
+# ---------------------------------------------------------------- 수명 규약 (RAG-028 ①)
 def test_ask_does_not_close_what_it_was_handed(monkeypatch: pytest.MonkeyPatch) -> None:
     """**넘겨받은 것을 닫지 않는다.** 서버는 lifespan 이 올린 모델과 요청당 커넥션을 넘기는데,
     여기서 닫아 버리면 두 번째 요청이 죽는다. `search(conn=None)` 의 `own` 패턴과 같은 규약이다."""
@@ -134,7 +134,7 @@ def test_ask_passes_the_borrowed_model_instead_of_loading(monkeypatch: pytest.Mo
 
 
 def test_ask_is_the_only_place_the_order_is_written(monkeypatch: pytest.MonkeyPatch) -> None:
-    """**조립 순서가 `rag` 것이라는 D-028 ③을 고정한다** — 검색이 생성보다 먼저 불린다.
+    """**조립 순서가 `rag` 것이라는 RAG-028 ③을 고정한다** — 검색이 생성보다 먼저 불린다.
 
     이 순서가 `app/services/ask.py` 로 옮겨가면 `rag generate`(검문소④)가 서빙과 다른 코드를
     검사하게 된다. 그때 이 테스트가 아니라 검문소가 조용히 무의미해지므로 여기서 못 박는다.
@@ -151,16 +151,16 @@ def test_ask_is_the_only_place_the_order_is_written(monkeypatch: pytest.MonkeyPa
 
 
 def test_serving_default_k_matches_the_judged_k() -> None:
-    """9단계가 컨텍스트에 넣는 수가 검문소③·D-024 ②의 판정 k 와 같아야 한다."""
+    """9단계가 컨텍스트에 넣는 수가 검문소③·RAG-024 ②의 판정 k 와 같아야 한다."""
     from app.services import ask as service
 
     assert service.SERVING_K == search.DEFAULT_K
 
 
-# ---------------------------------------------------------------- 덤프 (D-028 ⑥)
+# ---------------------------------------------------------------- 덤프 (RAG-028 ⑥)
 def test_dump_row_keeps_the_logical_address() -> None:
     """**2랩에서 재수집하면 `chunk_id` 가 바뀐다** (수집 날짜가 들어 있다). 논리 주소를 함께
-    남기지 않으면 1랩 덤프와 대조가 통째로 깨진다 — D-022 ⑥B 와 같은 처리다."""
+    남기지 않으면 1랩 덤프와 대조가 통째로 깨진다 — RAG-022 ⑥B 와 같은 처리다."""
     a = generate.answer("q", HITS, client=FakeClient("제16조"), model="fake")
     row = generate.dump_rows([("Q1", a, {"doc#c1"}, set())])[0]
     assert [h.logical for h in row.hits] == ["doc#c1", "doc#c2"]
@@ -168,7 +168,7 @@ def test_dump_row_keeps_the_logical_address() -> None:
 
 
 def test_dump_row_carries_the_three_comparison_axes() -> None:
-    """비교 축 셋이 다 있어야 2랩이 성립한다 (D-028 ⑥ⓐ). `text` 는 축이 아니라 읽을거리다."""
+    """비교 축 셋이 다 있어야 2랩이 성립한다 (RAG-028 ⑥ⓐ). `text` 는 축이 아니라 읽을거리다."""
     a = generate.answer("q", HITS, client=FakeClient("제16조 와 제999조"), model="fake")
     row = generate.dump_rows([("Q1", a, set(), set())])[0]
     assert [h.chunk_id for h in row.hits] and row.cited and row.ungrounded == ["제999조"]

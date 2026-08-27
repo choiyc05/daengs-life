@@ -1,6 +1,6 @@
 """`.meta.json` 의 source_id → 파서 모듈 매핑.
 
-**크롤러와 같은 규약이다** (D-009, D-018) — 폴더를 스캔하지 않고 경로를 계산한다.
+**크롤러와 같은 규약이다** (RAG-009, RAG-018) — 폴더를 스캔하지 않고 경로를 계산한다.
 
   raw/law/law-drf-api-...xml + meta{"source_id":"law-drf-api"}
     → rag.stages.parse.parsers.law.law_drf_api          (`-` → `_`)
@@ -17,7 +17,7 @@ from types import ModuleType
 
 # 파서를 만들지 않기로 한 소스 + 그 근거. 값은 CLI 에 그대로 출력된다.
 NOT_INDEXED: dict[str, str] = {
-    "law-animal-protection": "웹 원문 — API(law-drf-api)와 같은 법령. 출처 링크 생성용 (D-004/D-011)",
+    "law-animal-protection": "웹 원문 — API(law-drf-api)와 같은 법령. 출처 링크 생성용 (RAG-004/RAG-011)",
     "law-livestock-epidemic": "웹 원문 — 〃",
 }
 

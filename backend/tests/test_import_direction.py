@@ -1,6 +1,6 @@
-"""의존 방향 가드 — `crawler` 는 백엔드 앱 쪽을 import 하지 않는다 (D-009, D-014).
+"""의존 방향 가드 — `crawler` 는 백엔드 앱 쪽을 import 하지 않는다 (RAG-009, RAG-014).
 
-D-001 원칙 1 이 "FastAPI 없이 `python -m crawler` 단독 실행" 을 요구한다. 방향이 한 번 뒤집히면
+RAG-001 원칙 1 이 "FastAPI 없이 `python -m crawler` 단독 실행" 을 요구한다. 방향이 한 번 뒤집히면
 크롤러가 앱 설정·DB 세션을 끌고 들어와 CLI 도 Celery 워커도 앱 전체를 세워야 돌아간다.
 지금까지는 사람이 지키는 규칙이었고, 이 테스트가 그걸 기계가 지키게 만든다.
 
@@ -15,8 +15,8 @@ from pathlib import Path
 CRAWLER_DIR = Path(__file__).resolve().parents[1] / "crawler"
 
 # crawler 가 import 하면 안 되는 최상위 모듈. `app/` 이 실물이고 `main.py` 는 그것을 가리키는
-# 2줄 shim 이다 (D-027) — 완전 이동은 `feat/rag` 가 main 에 합쳐진 뒤에 한다.
-# `rag` 는 파싱~검색 엔진(D-018). 방향은 app -> rag -> crawler 한쪽뿐이라 crawler 가 rag 를
+# 2줄 shim 이다 (RAG-027) — 완전 이동은 `feat/rag` 가 main 에 합쳐진 뒤에 한다.
+# `rag` 는 파싱~검색 엔진(RAG-018). 방향은 app -> rag -> crawler 한쪽뿐이라 crawler 가 rag 를
 # 끌어다 쓰면 안 된다 — 뒤집히면 `python -m crawler` 가 torch 까지 세워야 도는 물건이 된다.
 # `realtime` 은 파트② 실시간 엔진(RT-001 ①-2). 같은 이유로 반대 방향만 허용한다.
 FORBIDDEN = {"app", "tasks", "main", "rag", "realtime"}
@@ -46,7 +46,7 @@ def _violations() -> list[str]:
 def test_crawler_does_not_import_backend_app() -> None:
     found = _violations()
     assert not found, (
-        "crawler 가 앱 쪽을 import 했다. 의존 방향은 app → crawler 한쪽뿐이다 (D-009).\n  "
+        "crawler 가 앱 쪽을 import 했다. 의존 방향은 app → crawler 한쪽뿐이다 (RAG-009).\n  "
         + "\n  ".join(found)
     )
 

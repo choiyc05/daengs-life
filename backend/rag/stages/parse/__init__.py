@@ -1,17 +1,17 @@
-"""2단계 파싱 — `raw/` → `processed/parsed/` (D-018, D-019).
+"""2단계 파싱 — `raw/` → `processed/parsed/` (RAG-018, RAG-019).
 
-**이 단계만 소스별로 코드가 갈린다.** 그래서 안에 3층이 있다 (D-018):
+**이 단계만 소스별로 코드가 갈린다.** 그래서 안에 3층이 있다 (RAG-018):
 
   ① `extract/`   포맷 층 — PDF·HWPX·괘선표를 어떻게 여나. 사이트를 모른다
   ② `parsers/`   사이트 층 — 그 사이트의 태그·클래스·표 관례
   ③ `rag.core.ir` 계약 — 산출물 모양. 청커·임베더·적재기는 이것만 안다
 
-이 3층은 **파싱을 어떻게 하나의 구조**이지 패키지 전체의 구조가 아니다. D-023 이 그것을
+이 3층은 **파싱을 어떻게 하나의 구조**이지 패키지 전체의 구조가 아니다. RAG-023 이 그것을
 parse 단계 안으로 넣은 이유가 이것이다 — 밖에 있으면 `chunk.py` · `embed.py` 와 같은 평면에
 놓여 "왜 얘는 폴더고 얜 파일인가" 로 읽힌다.
 
 `status()` 와 `parse_doc()` 은 원래 `__main__.cmd_parse` 안에 있었다. 다른 단계는 전부 자기
-모듈에 로직이 있는데 parse 만 CLI 에 있어서 단계마다 모양이 달랐다 (D-023 배경 ②).
+모듈에 로직이 있는데 parse 만 CLI 에 있어서 단계마다 모양이 달랐다 (RAG-023 배경 ②).
 CLI 는 이제 여기를 부르고 출력만 한다.
 """
 from __future__ import annotations
@@ -28,7 +28,7 @@ __all__ = ["registry", "status", "parse_doc"]
 
 
 def status(doc: io.RawDoc) -> tuple[str, str]:
-    """(라벨, 사유). **'인덱싱 안 함'(결정)과 '파서 없음'(할 일)을 섞지 않는다** — D-018.
+    """(라벨, 사유). **'인덱싱 안 함'(결정)과 '파서 없음'(할 일)을 섞지 않는다** — RAG-018.
 
     둘 다 파서가 없지만 뜻이 정반대다. CLI 출력에서 섞이면 아직 안 만든 파서를 영영 못 알아챈다.
     """
@@ -54,7 +54,7 @@ def parse_doc(doc: io.RawDoc) -> tuple[Document, list[AnyElement], dict[str, int
         doc_id=doc.doc_id,
         source_id=doc.source_id,
         domain=doc.domain,
-        # `.meta.json` 이 유일하게 아는 값이다. 여기서 안 실으면 하류 어디에도 없다 (D-025 ④)
+        # `.meta.json` 이 유일하게 아는 값이다. 여기서 안 실으면 하류 어디에도 없다 (RAG-025 ④)
         source=meta.get("source") or "",
         category=meta["category"],
         subcategory=meta.get("subcategory") or "",

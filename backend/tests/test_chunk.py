@@ -1,10 +1,10 @@
-"""청커 통합 테스트 — `data/processed/parsed/` 실물을 읽는다 (D-021).
+"""청커 통합 테스트 — `data/processed/parsed/` 실물을 읽는다 (RAG-021).
 
-**이 파일이 검문소①이다.** D-021 은 "구현 뒤 질문 1~7 의 정답 청크가 하나씩 실재하는지 눈으로
+**이 파일이 검문소①이다.** RAG-021 은 "구현 뒤 질문 1~7 의 정답 청크가 하나씩 실재하는지 눈으로
 확인한다"를 재개 조건으로 걸었다. 눈으로만 보면 다음 개정 때 아무도 다시 안 본다. 그래서
 그 확인을 테스트로 박는다 — 정답이 사라지면 6단계 점수가 아니라 **여기서 먼저 깨진다.**
 
-`data/` 는 git 미추적이라(D-017) 다른 PC 에는 없다. parsed 가 없으면 실패가 아니라 skip 이다.
+`data/` 는 git 미추적이라(RAG-017) 다른 PC 에는 없다. parsed 가 없으면 실패가 아니라 skip 이다.
 
 수치를 박아 둔 이유는 `test_parse.py` 와 같다 — 법령이 개정되면 여기서 알려야 한다.
 """
@@ -56,7 +56,7 @@ def test_by_type(chunks: list) -> None:
 
 
 def test_chunk_id_unique(chunks: list) -> None:
-    """`chunk_id` 는 5단계 골든셋이 정답을 가리키는 주소다 (D-021 ⑤B).
+    """`chunk_id` 는 5단계 골든셋이 정답을 가리키는 주소다 (RAG-021 ⑤B).
 
     별표 행은 마커를 가진 것이 56%뿐이고 그중 35건이 중복이라, `r{순번}` 폴백 없이는
     유일성이 깨진다. 그 폴백이 실제로 작동하는지가 여기서 확인된다.
@@ -73,7 +73,7 @@ def test_hard_cap(chunks: list) -> None:
 
 
 def test_soft_cap_known_only(chunks: list) -> None:
-    """D-004 2,000자를 넘는 것은 **아는 3건뿐**이다 (④ — 폴백을 두지 않기로 했다).
+    """RAG-004 2,000자를 넘는 것은 **아는 3건뿐**이다 (④ — 폴백을 두지 않기로 했다).
 
     늘어나면 ④ 를 재개할 트리거다. 그래서 통과가 아니라 목록을 고정한다.
     """
@@ -101,7 +101,7 @@ def test_other_law_amendments_dropped(chunks: list) -> None:
 def test_form_tables_dropped(chunks: list) -> None:
     """헤더가 전무한 표 9개는 서식이다 — 표가 아니라 레이아웃이다 (④ 에서 발견).
 
-    D-004 가 서식 126건을 뺀 것과 같은 종류다. 남아 있으면 `(서명 또는 인)` 같은
+    RAG-004 가 서식 126건을 뺀 것과 같은 종류다. 남아 있으면 `(서명 또는 인)` 같은
     빈 양식 필드가 검색 후보가 된다.
     """
     assert _find(chunks, "#별표", "서명 또는 인") == []
@@ -125,7 +125,7 @@ def test_article_carries_law_name(chunks: list) -> None:
 
 
 def test_table_row_pairs_header_with_value(chunks: list) -> None:
-    """`20` 이 20원인지 20만원인지는 헤더·단위와 붙어 있어야만 안다 (D-004 · ③(나))."""
+    """`20` 이 20원인지 20만원인지는 헤더·단위와 붙어 있어야만 안다 (RAG-004 · ③(나))."""
     c = _find(chunks, "#별표 4-2-라")[0]
     assert "(단위: 만원)" in c.content
     assert "과태료 금액 1차 위반: 20" in c.content          # 헤더줄이 아니라 `헤더: 값`
@@ -151,7 +151,7 @@ def test_qa_carries_related_laws(chunks: list) -> None:
     """qa 10건 중 본문에 법령명이 있는 것은 2건뿐이었다 (③(마) 정정).
 
     조문에서 법령명 복원율이 0% 였던 것과 같은 병리라 `related_laws` 를 본문에 넣는다.
-    D-004 판정표의 "관련법령은 메타로" 를 정정한 결과다.
+    RAG-004 판정표의 "관련법령은 메타로" 를 정정한 결과다.
     """
     qas = [c for c in chunks if c.element_type == "qa"]
     assert len(qas) == 10
@@ -166,8 +166,8 @@ def test_row_self_contained(chunks: list) -> None:
 
 
 # ---------------------------------------------------------------- 검문소① — 질문 1~7
-# D-004 가 원문에서 확인한 정답 위치다. 이 목록이 곧 검문소①이고,
-# 하나라도 깨지면 D-021 의 해당 절을 재개해야 한다.
+# RAG-004 가 원문에서 확인한 정답 위치다. 이 목록이 곧 검문소①이고,
+# 하나라도 깨지면 RAG-021 의 해당 절을 재개해야 한다.
 ANSWERS = [
     ("Q1 등록 의무",        "animal-protection-act__20260820#제15조",   ["등록하여야 한다"]),
     ("Q1 과태료 100만원",   "animal-protection-act__20260820#제101조",  ["100만원 이하의 과태료"]),
@@ -186,7 +186,7 @@ ANSWERS = [
 
 @pytest.mark.parametrize("name,id_part,must", ANSWERS, ids=[a[0] for a in ANSWERS])
 def test_checkpoint1(chunks: list, name: str, id_part: str, must: list) -> None:
-    assert _find(chunks, id_part, *must), f"{name}: 정답 청크가 없다 — D-021 재개 조건"
+    assert _find(chunks, id_part, *must), f"{name}: 정답 청크가 없다 — RAG-021 재개 조건"
 
 
 def test_q4_subitem_survives(chunks: list) -> None:

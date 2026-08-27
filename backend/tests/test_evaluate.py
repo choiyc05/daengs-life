@@ -1,14 +1,14 @@
-"""6단계 채점기 테스트 — **지표 정의와 판정 규칙만** 본다 (D-024).
+"""6단계 채점기 테스트 — **지표 정의와 판정 규칙만** 본다 (RAG-024).
 
 `test_embed.py` 와 같은 이유로 가중치를 로드하지 않는다. 그런데 여기는 이유가 하나 더 있다.
 
-**D-024 의 결정은 숫자가 아니라 규칙이다.** "탈락선은 `Hit@5`, 2문항 차, 동률이면 기준선" 이
+**RAG-024 의 결정은 숫자가 아니라 규칙이다.** "탈락선은 `Hit@5`, 2문항 차, 동률이면 기준선" 이
 지켜지는지는 실제 벡터가 필요 없고, 오히려 벡터가 있으면 확인이 어려워진다 — 실물 15문항이
 어떻게 나오든 규칙은 같아야 하기 때문이다. 그래서 `item_metrics` 와 `judge` 를 데이터 없이
 손계산으로 붙잡는다.
 
 **여기서 깨지면 6단계 점수가 아니라 6단계의 규칙이 무너진 것이다.** 특히
-`test_recall_cannot_change_the_winner` 는 D-024 ③ 의 마지막 문단(참고 지표가 승자 규칙에
+`test_recall_cannot_change_the_winner` 는 RAG-024 ③ 의 마지막 문단(참고 지표가 승자 규칙에
 들어오면 ① 이 뒷문으로 무너진다)을 코드로 고정한 것이다.
 """
 from __future__ import annotations
@@ -18,9 +18,9 @@ import pytest
 from rag.stages import embed, evaluate
 
 
-# ---------------------------------------------------------------- 상수 = 결정 (D-024 ②③)
+# ---------------------------------------------------------------- 상수 = 결정 (RAG-024 ②③)
 def test_judge_k_is_five() -> None:
-    """변별력과 운영 k(검문소③ top-5)가 같은 답을 가리켰다 (D-024 ②)."""
+    """변별력과 운영 k(검문소③ top-5)가 같은 답을 가리켰다 (RAG-024 ②)."""
     assert evaluate.JUDGE_K == 5
     assert evaluate.JUDGE_K in evaluate.KS
 
@@ -31,7 +31,7 @@ def test_table_carries_every_k() -> None:
 
 
 def test_cut_gap_is_two_questions() -> None:
-    """15분의 1 = 6.7%p 눈금이라 1문항 차이는 문항 하나의 우연이다 (D-024 ③)."""
+    """15분의 1 = 6.7%p 눈금이라 1문항 차이는 문항 하나의 우연이다 (RAG-024 ③)."""
     assert evaluate.CUT_GAP == 2
 
 
@@ -41,7 +41,7 @@ def test_preference_starts_at_baseline() -> None:
     assert evaluate.PREFERENCE == tuple(embed.MODELS)
 
 
-# ---------------------------------------------------------------- 지표 (D-024 ③)
+# ---------------------------------------------------------------- 지표 (RAG-024 ③)
 def test_hit_is_binary_any_must() -> None:
     """`Hit` 은 필수가 **하나라도** top-k 면 1이다. 이 이진성이 탈락선의 성격 그 자체다."""
     m = evaluate.item_metrics([4, 300, 900])
@@ -59,7 +59,7 @@ def test_recall_counts_how_many() -> None:
 
 
 def test_hit_and_recall_disagree_on_purpose() -> None:
-    """**D-024 ③ 이 감수한 대가를 고정한다.**
+    """**RAG-024 ③ 이 감수한 대가를 고정한다.**
 
     Q4(로트와일러)처럼 필수 둘이 다 있어야 인용이 성립하는 문항에서, 하나만 걸린 결과와
     둘 다 걸린 결과가 `Hit` 으로는 구분되지 않는다. 이것은 버그가 아니라 결정이고,
@@ -84,10 +84,10 @@ def test_missing_must_scores_zero_not_crash() -> None:
 
 
 def test_macro_is_question_even() -> None:
-    """문항 균등 (D-024 ③).
+    """문항 균등 (RAG-024 ③).
 
     micro(43쌍 통짜)를 쓰지 않는 이유는 easylaw 가 31/43 = 72% 를 지배하기 때문이고, 그 라벨이
-    많은 건 난이도가 아니라 **법제처 목록 차용**(D-022 ②)이라 가중치로 바꾸면 안 된다.
+    많은 건 난이도가 아니라 **법제처 목록 차용**(RAG-022 ②)이라 가중치로 바꾸면 안 된다.
     여기서는 필수 1개짜리와 5개짜리가 **같은 무게**인지만 확인한다.
     """
     one = evaluate.item_metrics([1])                    # 필수 1개, 다 맞음
@@ -98,7 +98,7 @@ def test_macro_is_question_even() -> None:
     assert evaluate.macro(per_item, "recall", 5) == pytest.approx(0.8)  # (1.0 + 0.6) / 2
 
 
-# ---------------------------------------------------------------- 판정 (D-024 ①③)
+# ---------------------------------------------------------------- 판정 (RAG-024 ①③)
 def _hits(bge: int, kure: int, qwen: int) -> dict[str, int]:
     return dict(zip(embed.MODELS, (bge, kure, qwen)))
 
@@ -120,7 +120,7 @@ def test_one_question_gap_is_noise() -> None:
 
 
 def test_all_tied_goes_to_baseline() -> None:
-    """포화(셋 다 15/15)도 결과다 — 셋 중 뭘 써도 15문항에서는 같다는 뜻이다 (D-024 ③).
+    """포화(셋 다 15/15)도 결과다 — 셋 중 뭘 써도 15문항에서는 같다는 뜻이다 (RAG-024 ③).
 
     여기서 k 를 낮춰 다시 보지 **않는다**. 그 사다리는 "갈릴 때까지 기준을 바꾼다"와 구분되지 않는다.
     """
@@ -129,14 +129,14 @@ def test_all_tied_goes_to_baseline() -> None:
 
 
 def test_only_one_survivor_says_so() -> None:
-    """탈락으로 갈렸을 때와 동률일 때를 요약이 구분해야 한다 (D-024 ④ 필수 3항)."""
+    """탈락으로 갈렸을 때와 동률일 때를 요약이 구분해야 한다 (RAG-024 ④ 필수 3항)."""
     v = evaluate.judge(_hits(bge=5, kure=15, qwen=4))
     assert v.winner == "kure-v1" and v.survivors == ["kure-v1"]
     assert "탈락으로 갈렸다" in v.rule
 
 
 def test_baseline_eliminated_is_flagged() -> None:
-    """**D-024 ① 이 말하지 않은 자리** — 기준선이 탈락하고 둘이 남는 경우.
+    """**RAG-024 ① 이 말하지 않은 자리** — 기준선이 탈락하고 둘이 남는 경우.
 
     사전 순위로 집되 그 사실을 요약이 드러내야 한다. 결과를 보고 규칙을 정하는 자리가 생기면
     사전 등록이 무너지므로, 일어나지 않을 것 같은 경우에도 규칙이 먼저 있어야 한다.
@@ -148,7 +148,7 @@ def test_baseline_eliminated_is_flagged() -> None:
 
 
 def test_recall_cannot_change_the_winner() -> None:
-    """**`judge` 는 Hit 문항 수만 받는다.** Recall·MRR 을 넘길 자리가 없다 (D-024 ③).
+    """**`judge` 는 Hit 문항 수만 받는다.** Recall·MRR 을 넘길 자리가 없다 (RAG-024 ③).
 
     이 서명이 지켜지는 한 "Hit 은 동률인데 Recall 이 높으니 이쪽" 이 코드에 들어올 수 없다.
     """
@@ -158,12 +158,12 @@ def test_recall_cannot_change_the_winner() -> None:
     assert list(sig.parameters) == ["hits"]
 
 
-# ---------------------------------------------------------------- 산출물 (D-024 ④)
+# ---------------------------------------------------------------- 산출물 (RAG-024 ④)
 def test_dump_goes_to_untracked_processed() -> None:
     """덤프는 `data/processed/eval/` 이다 — `.gitignore` 가 덮는 자리.
 
     `data/eval/` 은 **추적되는** 폴더라 여기 쓰면 450행이 커밋된다. `data/README.md` 의 예외는
-    "손으로 만드는 것"이지 기계 산출물이 아니다 (D-024 ④).
+    "손으로 만드는 것"이지 기계 산출물이 아니다 (RAG-024 ④).
     """
     from rag.core import config, io
 
@@ -175,7 +175,7 @@ def test_dump_goes_to_untracked_processed() -> None:
 
 
 def test_summary_carries_the_four_required_things() -> None:
-    """요약 4항 (D-024 ④): 점수표 · `Hit@5=0` 문항 id · ①의 어느 줄 · 코퍼스 스냅샷.
+    """요약 4항 (RAG-024 ④): 점수표 · `Hit@5=0` 문항 id · ①의 어느 줄 · 코퍼스 스냅샷.
 
     덤프가 미추적이라 이것이 뒤에 남는 전부다. 하나라도 빠지면 "왜 이 모델인가"에 못 답한다.
     """

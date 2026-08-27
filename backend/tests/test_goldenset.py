@@ -1,13 +1,13 @@
-"""골든셋 검증 — `backend/rag/stages/goldenset.yaml` 과 `data/processed/chunks/` 를 맞춰 본다 (D-022).
+"""골든셋 검증 — `backend/rag/stages/goldenset.yaml` 과 `data/processed/chunks/` 를 맞춰 본다 (RAG-022).
 
 **검문소①(`test_chunk.py`)과 같은 역할을 5단계에서 한다.** 검문소①은 "정답 청크가 코퍼스에
 존재하나"를 물었고, 여기는 "골든셋이 가리키는 주소가 실재하나"를 묻는다. 둘은 다르다 —
-D-022 ⑤ 가 실제로 두 군데(질문 3 의 과태료 조항, 질문 6 의 조문 수)에서 어긋난 것을 찾아냈다.
+RAG-022 ⑤ 가 실제로 두 군데(질문 3 의 과태료 조항, 질문 6 의 조문 수)에서 어긋난 것을 찾아냈다.
 
 없는 주소를 가리키는 `must` 는 그 문항의 Recall 을 영원히 0 으로 만들고, 증상은 6단계에서
 "이 모델이 유독 못한다" 로만 나타난다. 그러면 라벨 오타가 승자를 정하게 된다.
 
-`goldenset.yaml` 은 git 추적이지만 `data/` 는 미추적이라(D-017) 다른 PC 에는 청크가 없다.
+`goldenset.yaml` 은 git 추적이지만 `data/` 는 미추적이라(RAG-017) 다른 PC 에는 청크가 없다.
 청크가 필요한 테스트만 skip 하고, YAML 자체를 보는 테스트는 어디서나 돈다.
 """
 from __future__ import annotations
@@ -55,14 +55,14 @@ def test_every_item_has_a_must(gs: goldenset.GoldenSet) -> None:
     """`must` 가 빈 문항은 Recall 이 0/0 이라 채점이 정의되지 않는다.
 
     질문 7 이 이 자리에 걸릴 뻔했다 — 정답이 미수집 시행령에만 있다고 봤으나, easylaw ※박스가
-    답과 조항 인용을 함께 담고 있어 그것이 필수가 됐다 (D-022 ⑤).
+    답과 조항 인용을 함께 담고 있어 그것이 필수가 됐다 (RAG-022 ⑤).
     """
     empty = [i.id for i in gs.items if not i.must]
     assert not empty, f"필수 라벨이 없는 문항: {empty}"
 
 
 def test_labels_carry_no_collection_date(gs: goldenset.GoldenSet) -> None:
-    """라벨은 **날짜를 뺀 논리 주소**여야 한다 (D-022 ⑥B).
+    """라벨은 **날짜를 뺀 논리 주소**여야 한다 (RAG-022 ⑥B).
 
     `chunk_id` 에는 수집일이 박혀 있고(`crawler/core/store.py`), `data/` 가 미추적이라
     새 PC 에서는 재수집이 정상 경로다. 날짜가 붙은 라벨은 그 순간 전부 깨진다.
@@ -72,7 +72,7 @@ def test_labels_carry_no_collection_date(gs: goldenset.GoldenSet) -> None:
 
 
 def test_easylaw_items_do_not_label_their_own_qa_chunk(gs: goldenset.GoldenSet) -> None:
-    """D-022 ② 의 핵심이 무너지지 않았는지 본다.
+    """RAG-022 ② 의 핵심이 무너지지 않았는지 본다.
 
     qa 청크는 자기 질문을 첫 줄에 그대로 담고 있어 세 모델이 전부 1위로 찾는다. 그것이 `must` 로
     올라가면 그 문항은 아무것도 가르지 못한다. `nice` 로만 있어야 한다.
@@ -85,7 +85,7 @@ def test_easylaw_items_do_not_label_their_own_qa_chunk(gs: goldenset.GoldenSet) 
 
 
 def test_unavailable_is_recorded_not_dropped(gs: goldenset.GoldenSet) -> None:
-    """코퍼스 밖 참조는 지우지 않고 남긴다 — 그 법령을 수집하면 `must` 로 올라가야 한다 (D-022 ③).
+    """코퍼스 밖 참조는 지우지 않고 남긴다 — 그 법령을 수집하면 `must` 로 올라가야 한다 (RAG-022 ③).
 
     부분 보유 2문항(유기견 신고 · 병원 사체처리)과 질문 7 이 여기 걸린다.
     """
@@ -123,7 +123,7 @@ def test_must_chunks_are_not_empty(gs: goldenset.GoldenSet, index: dict) -> None
 
 
 def test_q4_label_covers_the_confirmed_breed_list(gs: goldenset.GoldenSet, index: dict) -> None:
-    """질문 4 는 법 조문만으로는 인용이 부실하다 — 시행규칙이 함께 있어야 한다 (D-022 ⑤).
+    """질문 4 는 법 조문만으로는 인용이 부실하다 — 시행규칙이 함께 있어야 한다 (RAG-022 ⑤).
 
     법 제2조제5호가목은 "도사견, 핏불테리어, 로트와일러 **등** ... 농림축산식품부령으로 정하는 개"
     라 로트와일러가 예시로만 나온다. 확정 목록은 시행규칙 제2조 제5호다.
@@ -139,7 +139,7 @@ def test_q4_label_covers_the_confirmed_breed_list(gs: goldenset.GoldenSet, index
 
 
 def test_q3_label_reaches_the_fine_amount(gs: goldenset.GoldenSet, index: dict) -> None:
-    """질문 3 은 "얼마"를 묻는다. 검문소① 라벨에는 과태료 조항이 없었다 (D-022 ⑤).
+    """질문 3 은 "얼마"를 묻는다. 검문소① 라벨에는 과태료 조항이 없었다 (RAG-022 ⑤).
 
     금액에 닿지 못하는 라벨이면 금액을 못 찾는 모델이 만점을 받는다.
     """

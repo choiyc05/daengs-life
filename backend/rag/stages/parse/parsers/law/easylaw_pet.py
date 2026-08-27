@@ -1,4 +1,4 @@
-"""찾기쉬운 생활법령정보 "반려동물과 생활하기" 파서 — 해설 본문 + 100문100답 (D-004, D-018).
+"""찾기쉬운 생활법령정보 "반려동물과 생활하기" 파서 — 해설 본문 + 100문100답 (RAG-004, RAG-018).
 
 **계층이 클래스명에 그대로 있다** (2026-08-21 실측, 본문 7페이지):
 
@@ -8,7 +8,7 @@
   plv4d         5. 로트와일러와 그 잡종의 개      본문 (질문 4의 정답)        → para
   tplv4   ※ 반려동물과 정부 지정 자연공원 이용하기  강조 박스 (질문 7의 정답)   → aside
 
-D-004 가 `인쇄체크` 대단위가 아니라 **소제목(plv2a)** 을 청킹 단위로 확정했다. 대단위는 한 덩어리에
+RAG-004 가 `인쇄체크` 대단위가 아니라 **소제목(plv2a)** 을 청킹 단위로 확정했다. 대단위는 한 덩어리에
 목줄+인식표+배설물+자연공원 네 주제가 섞여 기준③(한 청크 = 한 주제)을 깬다.
 
 강조 박스를 별도 요소로 두는 이유 — 제목이 따로 있고(`※ …`) 주제도 독립적이다. 앞 소제목에
@@ -134,7 +134,7 @@ def _parse_qna(soup: BeautifulSoup, doc_id: str) -> list:
                     continue
                 label = _text(th)
                 if "관련법령" in label:
-                    # 「법령명」 제○조 형태를 D-004 section 형식으로 정규화한다
+                    # 「법령명」 제○조 형태를 RAG-004 section 형식으로 정규화한다
                     for para in td.find_all("p") or [td]:
                         related_laws += [c for c in textutil.cites(_text(para))
                                          if c not in related_laws]
@@ -163,7 +163,7 @@ def parse(raw: bytes, doc: RawDoc) -> Parsed:
         elements=elements,
         document_title=title,
         published_at=doc.meta.get("published_at"),
-        # 원본을 받은 곳이 곧 사람이 열 페이지다. 법령 API 와 달리 바꿔칠 것이 없다 (D-019)
+        # 원본을 받은 곳이 곧 사람이 열 페이지다. 법령 API 와 달리 바꿔칠 것이 없다 (RAG-019)
         citation_url=doc.meta.get("source_url"),
         counts={"qna": int(is_qna)},
     )

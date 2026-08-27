@@ -1,12 +1,12 @@
 """raw/ 저장 + .meta.json + crawl_log.jsonl. data/README.md 규칙 1~4 의 구현.
 
-변경 감지(D-001 원칙 2):
+변경 감지(RAG-001 원칙 2):
   같은 slug 의 최신 .meta.json 과 sha256 을 비교한다.
   같으면 아무것도 쓰지 않고 로그에 changed:false 만 남긴다.
   다르면 오늘 날짜로 새 원본 + 새 meta 를 쓴다 (옛 파일은 지우지 않음 — 원본 불변).
 
   단, sha256 이 같아도 **meta 가 가리키는 원본이 디스크에 없으면 다시 받는다**.
-  원본은 git 미추적(D-008)이라 meta 만 clone 된 PC 에서는 전부 same 으로 스킵되어
+  원본은 git 미추적(RAG-008)이라 meta 만 clone 된 PC 에서는 전부 same 으로 스킵되어
   파싱 단계가 빈손이 된다. meta 는 '이 문서를 받은 적이 있다'는 기록일 뿐이고,
   파이프라인이 실제로 필요로 하는 것은 원본 파일이다.
 

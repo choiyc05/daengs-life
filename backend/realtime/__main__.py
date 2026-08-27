@@ -4,7 +4,7 @@
   python -m realtime geo 37.4979 127.0276   # 위경도 → 격자·대표점
   python -m realtime walk 37.4979 127.0276  # 조립 → 판정 (검문소 D)
 
-crawler·rag 와 같은 방식이다 — FastAPI 없이 단독으로 돈다 (D-001 원칙 1).
+crawler·rag 와 같은 방식이다 — FastAPI 없이 단독으로 돈다 (RAG-001 원칙 1).
 """
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ for _stream in (sys.stdout, sys.stderr):
 
 
 def cmd_config(args: argparse.Namespace) -> int:
-    """키가 읽혔는지만 보여준다. **값은 절대 찍지 않는다** — 터미널이 곧 로그다 (D-012)."""
+    """키가 읽혔는지만 보여준다. **값은 절대 찍지 않는다** — 터미널이 곧 로그다 (RAG-012)."""
     print("키")
     for name, value in config.KEYS.items():
         raw = getattr(config.settings, name.lower()).strip()

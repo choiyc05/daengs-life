@@ -1,8 +1,8 @@
-"""파서 통합 테스트 — `data/raw/` 실물을 읽는다 (D-018, D-019, D-020).
+"""파서 통합 테스트 — `data/raw/` 실물을 읽는다 (RAG-018, RAG-019, RAG-020).
 
 **네트워크도 DB도 쓰지 않는다.** 파서는 그것이 가능한 유일한 층이라 여기가 가장 촘촘해야 한다.
 
-`data/` 는 git 미추적이라(D-017) 다른 PC 에는 없을 수 있다. 원본이 없으면 실패가 아니라 skip 이다
+`data/` 는 git 미추적이라(RAG-017) 다른 PC 에는 없을 수 있다. 원본이 없으면 실패가 아니라 skip 이다
 — "크롤러를 먼저 돌려라"는 상태이지 코드가 틀린 것이 아니다.
 
 수치를 그대로 박아 둔 이유 — 법령이 개정되면 이 테스트가 깨진다. 그게 목적이다.
@@ -50,7 +50,7 @@ def _elements(parsed: dict, doc_key: str, etype: str) -> list:
 
 # ------------------------------------------------------------------ 계약
 def test_every_element_satisfies_the_ir_contract(law: dict, easylaw: dict) -> None:
-    """IR 6종 밖의 필드가 섞이면 청커가 그것을 못 본다 — 그 자리에서 실패해야 한다 (D-018)."""
+    """IR 6종 밖의 필드가 섞이면 청커가 그것을 못 본다 — 그 자리에서 실패해야 한다 (RAG-018)."""
     for parsed in (law, easylaw):
         for p in parsed.values():
             for e in p.elements:
@@ -58,7 +58,7 @@ def test_every_element_satisfies_the_ir_contract(law: dict, easylaw: dict) -> No
 
 
 def test_element_ids_are_unique_within_a_document(law: dict, easylaw: dict) -> None:
-    """요소 id 는 청크 id 의 근간이고 골든셋이 가리키는 주소다 (D-019). 겹치면 정답이 흔들린다."""
+    """요소 id 는 청크 id 의 근간이고 골든셋이 가리키는 주소다 (RAG-019). 겹치면 정답이 흔들린다."""
     for parsed in (law, easylaw):
         for doc_id, p in parsed.items():
             ids = [e.id for e in p.elements]
@@ -71,7 +71,7 @@ def test_law_element_totals(law: dict) -> None:
     assert len(law) == 8
     assert c["article"] == 629          # 조문. 장·절(전문)은 heading 으로 따로 센다
     assert c["heading"] == 36
-    assert sum(p.counts["skipped_forms"] for p in law.values()) == 126   # 서식 제외 (D-004)
+    assert sum(p.counts["skipped_forms"] for p in law.values()) == 126   # 서식 제외 (RAG-004)
 
 
 def test_article_keeps_paragraph_item_hierarchy(law: dict) -> None:
@@ -103,7 +103,7 @@ def test_unnumbered_paragraph_wrapping_items(law: dict) -> None:
 
 
 def test_hanja_image_tags_are_removed(law: dict) -> None:
-    """조문 텍스트에 `<img src="…flDownload.do…">…</img>` 가 박혀 있다 (D-004 가 넘긴 항목)."""
+    """조문 텍스트에 `<img src="…flDownload.do…">…</img>` 가 박혀 있다 (RAG-004 가 넘긴 항목)."""
     texts = [i.text for e in _elements(law, "livestock-epidemic-act", "article")
              for p in e.paragraphs for i in p.items for s in [i, *i.subitems] for _ in [0]
              for i in [s]]
@@ -113,7 +113,7 @@ def test_hanja_image_tags_are_removed(law: dict) -> None:
 
 
 def test_fine_table_is_cell_addressable(law: dict) -> None:
-    """질문 1·3 의 정답. 셀로 분해되지 않으면 `제101조제3항제4호` 를 복원할 수 없다 (D-020)."""
+    """질문 1·3 의 정답. 셀로 분해되지 않으면 `제101조제3항제4호` 를 복원할 수 없다 (RAG-020)."""
     table = next(t for t in _elements(law, "animal-protection-decree", "table")
                  if t.section == "별표 4")
     assert table.title == "과태료의 부과기준" and table.related == "제35조 관련"
@@ -127,7 +127,7 @@ def test_fine_table_is_cell_addressable(law: dict) -> None:
 
 
 def test_citation_url_is_human_openable(law: dict) -> None:
-    """API 주소는 키가 마스킹돼 사람이 못 연다. 답변에 실을 링크는 따로 만든다 (D-019)."""
+    """API 주소는 키가 마스킹돼 사람이 못 연다. 답변에 실을 링크는 따로 만든다 (RAG-019)."""
     p = next(v for k, v in law.items() if "veterinarian" in k)       # 웹 원문을 수집하지 않은 법령
     assert p.citation_url.startswith("https://www.law.go.kr/%EB%B2%95%EB%A0%B9/") or \
            p.citation_url.startswith("https://www.law.go.kr/법령/")
@@ -145,7 +145,7 @@ def test_easylaw_element_totals(easylaw: dict) -> None:
 
 
 def test_subheading_is_the_chunk_boundary(easylaw: dict) -> None:
-    """D-004 가 대단위(인쇄체크)가 아니라 소제목(plv2a)을 청킹 단위로 확정했다."""
+    """RAG-004 가 대단위(인쇄체크)가 아니라 소제목(plv2a)을 청킹 단위로 확정했다."""
     heads = _elements(easylaw, "easylaw-pet-2-2-1__", "heading")
     assert [h.text for h in heads if h.level == 2][:3] == [
         "반려견 목줄 등 안전조치하기", "반려견 인식표 부착하기", "반려견 배설물 수거하기"]
@@ -160,7 +160,7 @@ def test_highlight_box_keeps_its_own_topic(easylaw: dict) -> None:
 
 
 def test_qa_carries_normalized_related_laws(easylaw: dict) -> None:
-    """관련법령은 본문에서 빼고 메타로 (D-004). D-004 section 형식으로 정규화한다."""
+    """관련법령은 본문에서 빼고 메타로 (RAG-004). RAG-004 section 형식으로 정규화한다."""
     qa = _elements(easylaw, "easylaw-pet-2-2-1-qna", "qa")[0]
     assert qa.question.endswith("?") and qa.answer
     assert "동물보호법 제23조제1항" in qa.related_laws

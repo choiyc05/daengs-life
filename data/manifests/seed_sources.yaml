@@ -30,7 +30,7 @@
   notes: "등록(제15조), 안전조치, 맹견(사육허가/입마개/책임보험), 과태료. 시행규칙 제2조에 맹견 5종.
     법/시행령/시행규칙 3건을 함께 받는다.
     (2026-08-20 정찰: 이 URL 은 iframe 껍데기다. iframe src 의 lsiSeq+efYd 로 lsInfoR.do 를 부르면
-    조문이 서버 렌더링되어 나온다 — lsInfoP.do 는 AJAX 라 본문이 비어 있다. D-011)"
+    조문이 서버 렌더링되어 나온다 — lsInfoP.do 는 AJAX 라 본문이 비어 있다. RAG-011)"
 
 - id: law-livestock-epidemic
   domain: law

@@ -1,11 +1,11 @@
 """realtime 의 설정·경로.
 
-**키는 자기 Settings 로 읽는다** — crawler 가 자기 것을 갖는 이유와 같다 (D-015). 공유 Settings 를
+**키는 자기 Settings 로 읽는다** — crawler 가 자기 것을 갖는 이유와 같다 (RAG-015). 공유 Settings 를
 만들면 realtime 이 `LAW_OC`·`DATABASE_URL` 까지 알게 되어 패키지 경계가 이름 수준에서 흐려진다.
 
 **`crawler` 에서 가져오는 것은 경로 탐색 하나뿐이다** (RT-001 ①-2). "data/ 는 어디인가"의 답이
-둘이 되면 컨테이너에서 서로 다른 곳을 본다 (D-014). 넓히면 `Fetcher`·`store`·`seed_sources` 가
-따라 들어오고 그 순간 "실시간은 저장하지 않는다"(D-012)가 흐려진다 —
+둘이 되면 컨테이너에서 서로 다른 곳을 본다 (RAG-014). 넓히면 `Fetcher`·`store`·`seed_sources` 가
+따라 들어오고 그 순간 "실시간은 저장하지 않는다"(RAG-012)가 흐려진다 —
 `tests/test_import_direction_packages.py` 가 그 경계를 말이 아니라 기계로 막는다.
 """
 from __future__ import annotations
@@ -18,7 +18,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from crawler.core.config import DATA_DIR, KST, require_data_dir  # noqa: F401
 
 # 밑줄 이름을 그대로 가져오는 이유 — env 파일의 **병합 순서**(루트 .env → backend/.env, 뒤가 우선)는
-# 답이 둘이 되면 안 되는 값이다 (D-014·D-015). 여기서 다시 조립하면 crawler 쪽 순서가 바뀔 때
+# 답이 둘이 되면 안 되는 값이다 (RAG-014·RAG-015). 여기서 다시 조립하면 crawler 쪽 순서가 바뀔 때
 # realtime 만 조용히 달라진다. 공개 이름이 필요해지면 crawler 쪽에서 개명한다.
 from crawler.core.config import _ENV_FILES
 
@@ -61,7 +61,7 @@ class Settings(BaseSettings):
     # 이 예산은 콜드 스타트에서만 쓰인다 (④-d).
     static_budget_sec: float = 30.0
 
-    # --- 캐시·오케스트레이션 (D-001 · RT-001 ④) ---
+    # --- 캐시·오케스트레이션 (RAG-001 · RT-001 ④) ---
     # 비어 있으면 캐시가 프로세스 메모리로 떨어진다. **연결 실패도 마찬가지다** — ④-c 가
     # "Redis 를 쓰되 없어도 돈다"를 확정했고, 그 판단이 `cache.open_store()` 에 있다.
     redis_url: str = "redis://localhost:6379/0"

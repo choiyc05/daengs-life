@@ -7,17 +7,17 @@
   python -m rag chunk                                 # parsed → chunks (바뀐 것만)
   python -m rag chunk --source easylaw-pet -v
   python -m rag show <chunk_id 조각>                  # 검문소①용 — 청크를 눈으로 본다
-  python -m rag goldenset                             # 골든셋 라벨이 실재하는지 검사 (D-022)
+  python -m rag goldenset                             # 골든셋 라벨이 실재하는지 검사 (RAG-022)
   python -m rag goldenset -v                          # 문항별 라벨까지 전부
-  python -m rag evaluate                              # 6단계 3파전 — 채점하고 승자를 고른다 (D-024)
+  python -m rag evaluate                              # 6단계 3파전 — 채점하고 승자를 고른다 (RAG-024)
   python -m rag evaluate --model bge-m3 -v            # 하나만 (판정은 셋이 다 있어야 한다)
-  python -m rag load                                  # 7단계 documents 적재 (D-025)
+  python -m rag load                                  # 7단계 documents 적재 (RAG-025)
   python -m rag load --dry-run                        # DB 를 안 건드리고 만들 행만 확인
   python -m rag load --model qwen3-embedding-0.6b     # 모델 교체 = 같은 명령 재실행
-  python -m rag search "목줄 안 하면 과태료 얼마"      # 8단계 dense 검색 (D-026)
+  python -m rag search "목줄 안 하면 과태료 얼마"      # 8단계 dense 검색 (RAG-026)
   python -m rag search --questions                    # 검증질문 1~7 전부 = 검문소③
   python -m rag search --questions --no-supplementary # 부칙을 뺀 결과와 비교
-  python -m rag generate "목줄 안 하면 과태료 얼마"    # 9단계 검색+Gemini (D-028)
+  python -m rag generate "목줄 안 하면 과태료 얼마"    # 9단계 검색+Gemini (RAG-028)
   python -m rag generate --questions                  # 검증질문 1~7 전부 = **검문소④** + 1랩 덤프
   python -m rag generate --questions --dry-run        # 덤프를 쓰지 않는다
 """
@@ -50,7 +50,7 @@ def cmd_list(args: argparse.Namespace) -> int:
 
 
 def cmd_parse(args: argparse.Namespace) -> int:
-    """raw → parsed. **파싱 자체는 `stages.parse` 가 하고 여기는 출력만 한다** (D-023).
+    """raw → parsed. **파싱 자체는 `stages.parse` 가 하고 여기는 출력만 한다** (RAG-023).
 
     다른 단계는 전부 자기 모듈에 로직이 있는데 parse 만 CLI 안에 있었다.
     """
@@ -145,13 +145,13 @@ def cmd_chunk(args: argparse.Namespace) -> int:
 
     print(f"\n청크 합계: {dict(sorted(total.items()))}  총 {sum(total.values())}")
     if dropped:
-        # 무엇을 왜 뺐는지 항상 보여 준다. 조용한 소실이 이 프로젝트에서 두 번 문제가 됐다 (D-021 ①·⑤D)
+        # 무엇을 왜 뺐는지 항상 보여 준다. 조용한 소실이 이 프로젝트에서 두 번 문제가 됐다 (RAG-021 ①·⑤D)
         print(f"제외:      {dict(dropped)}")
     for w in warnings:
         print(f"  ! {w}")
     if dups:
         # 합쳐지는 것 자체는 옳다(내용이 같다). 조용한 것이 문제다 — 7단계 적재기가 content_hash 로
-        # 합칠 행을 미리 드러낸다 (D-021 ⑤D)
+        # 합칠 행을 미리 드러낸다 (RAG-021 ⑤D)
         print(f"  ! content 중복 {len(dups)}건 — 적재 시 content_hash 로 합쳐진다")
         for first, later in dups:
             print(f"      {later}  ==  {first}")
@@ -161,7 +161,7 @@ def cmd_chunk(args: argparse.Namespace) -> int:
 
 
 def cmd_embed(args: argparse.Namespace) -> int:
-    """chunks → embeddings/{key}.parquet. 모델 3종을 나란히 만든다 (D-002).
+    """chunks → embeddings/{key}.parquet. 모델 3종을 나란히 만든다 (RAG-002).
 
     **가드를 먼저 전부 돌린다.** 토크나이저는 가볍고 가중치 로드는 무거우니, 실패할 것이면
     6.5GB 를 올리기 전에 실패하는 편이 싸다.
@@ -181,7 +181,7 @@ def cmd_embed(args: argparse.Namespace) -> int:
     print(f"청크 {len(rows)}건  chunks_sha256 {fingerprint[:16]}")
 
     if args.restamp:
-        # D-025 ⑤ 의 일회성 대가 — 지문 *정의*가 바뀌어 기존 parquet 의 값이 옛 방식이다.
+        # RAG-025 ⑤ 의 일회성 대가 — 지문 *정의*가 바뀌어 기존 parquet 의 값이 옛 방식이다.
         # 벡터는 손대지 않고 메타만 갱신하되, 행이 실제로 일치할 때만 찍는다
         bad = 0
         for key in keys:
@@ -258,7 +258,7 @@ def cmd_show(args: argparse.Namespace) -> int:
 
 
 def cmd_goldenset(args: argparse.Namespace) -> int:
-    """골든셋 라벨이 실제 청크를 가리키는지 검사한다 (D-022 ⑥).
+    """골든셋 라벨이 실제 청크를 가리키는지 검사한다 (RAG-022 ⑥).
 
     없는 주소를 가리키는 must 는 그 문항의 Recall 을 영원히 0 으로 만들고, 증상은 6단계에서
     "이 모델이 유독 못한다" 로만 나타난다. 채점 전에 여기서 먼저 깨뜨린다.
@@ -294,10 +294,10 @@ def cmd_goldenset(args: argparse.Namespace) -> int:
 
 
 def cmd_evaluate(args: argparse.Namespace) -> int:
-    """6단계 3파전 — 채점하고 승자를 고른다 (D-024).
+    """6단계 3파전 — 채점하고 승자를 고른다 (RAG-024).
 
     **골든셋 검증을 먼저 통과해야 채점을 시작한다.** 없는 주소를 가리키는 must 는 그 문항의
-    점수를 영원히 0 으로 만들고, 증상은 "이 모델이 유독 못한다" 로만 나타난다 (D-022 ⑥).
+    점수를 영원히 0 으로 만들고, 증상은 "이 모델이 유독 못한다" 로만 나타난다 (RAG-022 ⑥).
     같은 이유로 **낡은 parquet 으로는 채점하지 않는다** — 다른 코퍼스를 잰 값이기 때문이다.
     """
     gs = goldenset.load()
@@ -320,7 +320,7 @@ def cmd_evaluate(args: argparse.Namespace) -> int:
     print(f"골든셋 {len(gs.items)}문항 / 필수 {gs.must_total}  ·  코퍼스 {len(index)}청크  ·  "
           f"chunks_sha256 {fingerprint[:16]}")
     print(f"판정 k={evaluate.JUDGE_K}  ·  탈락선 Hit@{evaluate.JUDGE_K} {evaluate.CUT_GAP}문항 차  ·  "
-          f"동률이면 사전 순위 {list(evaluate.PREFERENCE)} (D-024 ①③)")
+          f"동률이면 사전 순위 {list(evaluate.PREFERENCE)} (RAG-024 ①③)")
 
     summaries: dict[str, dict] = {}
     for key in keys:
@@ -337,7 +337,7 @@ def cmd_evaluate(args: argparse.Namespace) -> int:
         summaries[key] = summary
         if not args.dry_run:
             path = evaluate.write_dump(key, items, gs, fingerprint)
-            print(f"  {'dumped':11s} {key:22s} -> {path.name}  (미추적, D-024 ④)")
+            print(f"  {'dumped':11s} {key:22s} -> {path.name}  (미추적, RAG-024 ④)")
         if args.verbose:
             k = evaluate.JUDGE_K
             for it in items:
@@ -353,13 +353,13 @@ def cmd_evaluate(args: argparse.Namespace) -> int:
     print()
     print(evaluate.markdown(summaries, verdict, gs, fingerprint, len(index)))
     print()
-    print("  ^ 위 markdown 을 docs/decisions.md 의 D-024 에 `### 판정 결과` 로 붙인다 (D-024 ④).")
+    print("  ^ 위 markdown 을 docs/decisions-rag.md 의 RAG-024 에 `### 판정 결과` 로 붙인다 (RAG-024 ④).")
     print("    덤프는 미추적이라 이것이 뒤에 남는 전부다.")
     return 0
 
 
 def cmd_load(args: argparse.Namespace) -> int:
-    """chunks + embeddings → documents (D-008, D-025).
+    """chunks + embeddings → documents (RAG-008, RAG-025).
 
     **행을 먼저 다 만들고 나서 DB 를 연다.** 벡터 정렬이나 중복 처리에서 실패할 것이면
     연결하기 전에 실패하는 편이 싸고, `--dry-run` 이 같은 경로를 그대로 탄다.
@@ -381,7 +381,7 @@ def cmd_load(args: argparse.Namespace) -> int:
     if key != "qwen3-embedding-0.6b":
         # 판정 승자가 아닌 것으로 적재하는 것은 결정이지 사고가 아니다. 다만 조용하면 안 된다
         print("  * 판정 승자는 qwen3-embedding-0.6b 다 — 첫 관통을 기준선으로 가는 중"
-              " (D-024 `판정 이후`)")
+              " (RAG-024 `판정 이후`)")
 
     if args.dry_run:
         for row in prepared.rows[:args.show]:
@@ -400,7 +400,7 @@ def cmd_load(args: argparse.Namespace) -> int:
             mark = "  " if name == prepared.model_repo else "! "
             print(f"  {mark}기존 {n:5d}행  {name}")
         if any(name not in (prepared.model_repo, "(없음)") for name, _ in before):
-            print("  ! 다른 모델의 행이 있다 — upsert 가 같은 content_hash 를 덮어쓴다 (D-025 ①)")
+            print("  ! 다른 모델의 행이 있다 — upsert 가 같은 content_hash 를 덮어쓴다 (RAG-025 ①)")
 
         loader.upsert(conn, prepared.rows)
         total = loader.count(conn)
@@ -415,7 +415,7 @@ def cmd_load(args: argparse.Namespace) -> int:
 
 def _print_hits(hits, must=frozenset(), nice=frozenset(), width: int = 150) -> None:
     """검문소③이 눈으로 보는 화면. **`chunk_id` 를 항상 찍는다** — 골든셋 라벨과 같은 주소라
-    "이게 정답 청크인가"를 대조할 수 있다 (D-026 ②)."""
+    "이게 정답 청크인가"를 대조할 수 있다 (RAG-026 ②)."""
     if not hits:
         print("      (결과 없음)")
         return
@@ -430,9 +430,9 @@ def _print_hits(hits, must=frozenset(), nice=frozenset(), width: int = 150) -> N
 
 
 def cmd_search(args: argparse.Namespace) -> int:
-    """8단계 dense 검색 (D-026). **검색 자체는 `stages.search` 가 하고 여기는 출력만 한다.**
+    """8단계 dense 검색 (RAG-026). **검색 자체는 `stages.search` 가 하고 여기는 출력만 한다.**
 
-    D-023 이 parse 에서 정리한 모양 그대로이고, 이유는 9단계·FastAPI 가 같은 함수를 부르게
+    RAG-023 이 parse 에서 정리한 모양 그대로이고, 이유는 9단계·FastAPI 가 같은 함수를 부르게
     하기 위해서다 — 검색을 두 번 짜면 검문소③이 확인한 것과 서빙이 하는 것이 달라진다.
     """
     key = args.model or config.settings.embedding_model_key
@@ -452,7 +452,7 @@ def cmd_search(args: argparse.Namespace) -> int:
     print(f"모델 {key} ({embed.MODELS[key].repo})  ·  top-{args.k}  ·  {label}")
     if key != "qwen3-embedding-0.6b":
         print("  * 판정 승자는 qwen3-embedding-0.6b 다 — 첫 관통을 기준선으로 가는 중"
-              " (D-024 `판정 이후`)")
+              " (RAG-024 `판정 이후`)")
 
     # 모델을 한 번만 올린다. 질의 7개마다 6.5GB 를 올렸다 내리는 것은 낭비다
     model = embed.MODELS[key]
@@ -487,12 +487,12 @@ def cmd_search(args: argparse.Namespace) -> int:
 
 
 def cmd_generate(args: argparse.Namespace) -> int:
-    """9단계 — 검색 위에 Gemini 로 답을 만든다 (D-028). **조립은 `stages.generate` 가 하고
-    여기는 출력과 덤프만 한다** (D-023 이 parse 에서 정리한 모양 그대로).
+    """9단계 — 검색 위에 Gemini 로 답을 만든다 (RAG-028). **조립은 `stages.generate` 가 하고
+    여기는 출력과 덤프만 한다** (RAG-023 이 parse 에서 정리한 모양 그대로).
 
     `--questions` 가 **검문소④**다. 판정 문항을 사후에 만들지 않으려고 미리 못 박아 뒀다
-    (D-024 ①의 사전 등록과 같은 장치) — **답변에 등장한 조항 번호 중 컨텍스트에 실재하지 않는
-    것의 개수.** 0이면 프롬프트로 충분하고, 1 이상이면 구조로 막아야 한다(D-029).
+    (RAG-024 ①의 사전 등록과 같은 장치) — **답변에 등장한 조항 번호 중 컨텍스트에 실재하지 않는
+    것의 개수.** 0이면 프롬프트로 충분하고, 1 이상이면 구조로 막아야 한다(RAG-029).
     """
     key = args.model or config.settings.embedding_model_key
     if key not in embed.MODELS:
@@ -505,7 +505,7 @@ def cmd_generate(args: argparse.Namespace) -> int:
     items = searcher.hand_questions() if args.questions else [("", " ".join(args.query), set(), set())]
     print(f"임베딩 {key}  ·  Gemini {config.settings.gemini_model}  ·  top-{args.k}")
 
-    # 모델·커넥션·클라이언트를 **여기서 만들어 넘긴다** — D-028 ①의 수명 규약이다. 질의 7개마다
+    # 모델·커넥션·클라이언트를 **여기서 만들어 넘긴다** — RAG-028 ①의 수명 규약이다. 질의 7개마다
     # 6.5GB 를 올렸다 내릴 이유가 없고, 서버에서는 같은 자리에 lifespan 이 올린 것이 들어온다.
     try:
         client = generator._client()
@@ -552,7 +552,7 @@ def cmd_generate(args: argparse.Namespace) -> int:
         embed.release()
 
     if args.questions:
-        # 검문소④는 **문항 수로 센다.** D-024 ③ 이 Hit 을 문항 균등으로 읽은 것과 같은 이유다 —
+        # 검문소④는 **문항 수로 센다.** RAG-024 ③ 이 Hit 을 문항 균등으로 읽은 것과 같은 이유다 —
         # 조항을 많이 인용한 문항 하나가 점수를 지배하면 안 된다. 조항 총수는 참고로만 찍는다.
         bad = sum(1 for _, a, _, _ in answers if a.ungrounded)
         total = sum(len(a.ungrounded) for _, a, _, _ in answers)
@@ -561,7 +561,7 @@ def cmd_generate(args: argparse.Namespace) -> int:
         print("=" * 70)
         print(f"검문소④  조항을 인용한 문항 {cited}/{len(answers)}  ·  "
               f"컨텍스트에 없는 조항을 든 문항 {bad}/{len(answers)} (조항 수 {total})")
-        print("  0 이면 프롬프트로 충분하고, 1 이상이면 구조로 막아야 한다 (D-029)")
+        print("  0 이면 프롬프트로 충분하고, 1 이상이면 구조로 막아야 한다 (RAG-029)")
     return 0
 
 
@@ -603,14 +603,14 @@ def main(argv: list[str] | None = None) -> int:
     emb.add_argument("--dry-run", action="store_true", help="인코딩은 하고 쓰지는 않는다")
     emb.add_argument("--quiet", action="store_true", help="진행 막대를 끈다")
     emb.add_argument("--restamp", action="store_true",
-                     help="벡터는 두고 지문만 다시 찍는다 (D-025 ⑤ 일회성. 행이 일치할 때만)")
+                     help="벡터는 두고 지문만 다시 찍는다 (RAG-025 ⑤ 일회성. 행이 일치할 때만)")
     emb.set_defaults(fn=cmd_embed)
 
-    gld = sub.add_parser("goldenset", help="골든셋 라벨이 실재하는 청크인지 검사 (D-022)")
+    gld = sub.add_parser("goldenset", help="골든셋 라벨이 실재하는 청크인지 검사 (RAG-022)")
     gld.add_argument("-v", "--verbose", action="store_true", help="문항별 라벨을 전부 출력")
     gld.set_defaults(fn=cmd_goldenset)
 
-    ev = sub.add_parser("evaluate", help="6단계 3파전 — 채점하고 승자를 고른다 (D-024)")
+    ev = sub.add_parser("evaluate", help="6단계 3파전 — 채점하고 승자를 고른다 (RAG-024)")
     ev.add_argument("--model", help=f"하나만: {list(embed.MODELS)} (판정은 셋이 다 있어야 한다)")
     ev.add_argument("--force", action="store_true",
                     help="parquet 이 지금 청크와 어긋나도 채점한다")
@@ -618,35 +618,35 @@ def main(argv: list[str] | None = None) -> int:
     ev.add_argument("-v", "--verbose", action="store_true", help="문항별 결과를 전부 출력")
     ev.set_defaults(fn=cmd_evaluate)
 
-    ld = sub.add_parser("load", help="7단계 — chunks+embeddings → documents (D-025)")
-    ld.add_argument("--model", help=f"기본 {list(embed.MODELS)[0]} (D-024 판정 이후). 교체는 이 인자 하나")
+    ld = sub.add_parser("load", help="7단계 — chunks+embeddings → documents (RAG-025)")
+    ld.add_argument("--model", help=f"기본 {list(embed.MODELS)[0]} (RAG-024 판정 이후). 교체는 이 인자 하나")
     ld.add_argument("--dry-run", action="store_true", help="DB 를 열지 않고 만들 행만 확인")
     ld.add_argument("--show", type=int, default=5, help="dry-run 에서 보여 줄 행 수")
     ld.set_defaults(fn=cmd_load)
 
-    sr = sub.add_parser("search", help="8단계 — dense 검색 (검문소③, D-026)")
+    sr = sub.add_parser("search", help="8단계 — dense 검색 (검문소③, RAG-026)")
     sr.add_argument("query", nargs="*", help="질의. --questions 를 쓰면 생략")
     sr.add_argument("--questions", action="store_true",
                     help="검증질문 1~7 전부 (goldenset.yaml 의 origin=hand)")
     sr.add_argument("-k", type=int, default=searcher.DEFAULT_K, help="top-k (기본 5)")
-    sr.add_argument("--model", help=f"기본 {list(embed.MODELS)[0]} (D-024 판정 이후)")
+    sr.add_argument("--model", help=f"기본 {list(embed.MODELS)[0]} (RAG-024 판정 이후)")
     sr.add_argument("--category", help="policy/travel/food 로 사전 필터")
     sr.add_argument("--width", type=int, default=150, help="본문 발췌 길이")
     sr.add_argument("--no-supplementary", dest="supplementary", action="store_false",
                     help="부칙(시행일·경과조치)을 뺀다. **기본은 포함**이다 — 검문소③은"
-                         " 걸러지지 않은 것을 봐야 한다 (D-026 ①)")
+                         " 걸러지지 않은 것을 봐야 한다 (RAG-026 ①)")
 
-    gen = sub.add_parser("generate", help="9단계 — 검색 + Gemini 답변 (검문소④, D-028)")
+    gen = sub.add_parser("generate", help="9단계 — 검색 + Gemini 답변 (검문소④, RAG-028)")
     gen.add_argument("query", nargs="*", help="질의. --questions 를 쓰면 생략")
     gen.add_argument("--questions", action="store_true",
                      help="검증질문 1~7 전부 = 검문소④ (goldenset.yaml 의 origin=hand)")
     gen.add_argument("-k", type=int, default=searcher.DEFAULT_K, help="컨텍스트에 넣을 top-k (기본 5)")
-    gen.add_argument("--model", help=f"임베딩 모델. 기본 {list(embed.MODELS)[0]} (D-024 판정 이후)")
+    gen.add_argument("--model", help=f"임베딩 모델. 기본 {list(embed.MODELS)[0]} (RAG-024 판정 이후)")
     gen.add_argument("--category", help="policy/travel/food 로 사전 필터")
     gen.add_argument("--width", type=int, default=150, help="근거 발췌 길이 (답변 본문은 안 자른다)")
-    gen.add_argument("--lap", default="lap1", help="덤프 파일명. 2랩은 lap2 (D-028 ⑥)")
+    gen.add_argument("--lap", default="lap1", help="덤프 파일명. 2랩은 lap2 (RAG-028 ⑥)")
     gen.add_argument("--no-supplementary", dest="supplementary", action="store_false",
-                     help="부칙을 뺀다. 기본은 포함 — 서빙 기본값은 app/services 가 갖는다 (D-026 ①)")
+                     help="부칙을 뺀다. 기본은 포함 — 서빙 기본값은 app/services 가 갖는다 (RAG-026 ①)")
     gen.add_argument("--dry-run", action="store_true", help="덤프를 쓰지 않는다")
     gen.set_defaults(fn=cmd_generate)
     sr.set_defaults(fn=cmd_search, supplementary=True)

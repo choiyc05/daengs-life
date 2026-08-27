@@ -1,13 +1,13 @@
-"""5단계 골든셋 — 로드·검증 (D-022).
+"""5단계 골든셋 — 로드·검증 (RAG-022).
 
 **이 파일이 6단계의 채점 기준이고, 라벨이 곧 승자를 정한다.** 그래서 두 가지를 여기서 막는다.
 
 **① 라벨이 가리키는 청크가 실재하는가.** 골든셋은 사람이 손으로 쓴 YAML 이라 오타가 조용히 통과한다.
 없는 `chunk_id` 를 가리키는 must 는 그 문항의 Recall 을 영원히 0 으로 만들고, 증상은 6단계에서
-"이 모델이 유독 못한다"로만 나타난다. D-021 이 반복해서 다룬 **조용한 소실**과 같은 병리다.
+"이 모델이 유독 못한다"로만 나타난다. RAG-021 이 반복해서 다룬 **조용한 소실**과 같은 병리다.
 
 **② 라벨이 어느 코퍼스를 보고 쓰였는가.** `chunk_id` 에는 수집 날짜가 박혀 있다
-(`crawler/core/store.py`, `stem = f"{slug}__{today}"`). `data/` 는 미추적(D-017)이라 새 PC 에서는
+(`crawler/core/store.py`, `stem = f"{slug}__{today}"`). `data/` 는 미추적(RAG-017)이라 새 PC 에서는
 재수집이 정상 경로이고, 그때 날짜가 바뀐다. 그래서 라벨은 **날짜를 뺀 논리 주소**로 적고
 (`law-drf-api-...-act#제15조`), 스냅샷 날짜는 파일 머리에 따로 둔다. 날짜가 어긋나도 깨뜨리지는
 않되 — 조문 번호는 재수집해도 그대로다 — **개정으로 내용이 바뀌었을 수 있으므로 경고**한다.
@@ -24,13 +24,13 @@ from pydantic import BaseModel, ConfigDict
 
 from ..core import io
 
-GOLDENSET_PATH = Path(__file__).with_name("goldenset.yaml")   # 이 파일 옆 (D-023)
+GOLDENSET_PATH = Path(__file__).with_name("goldenset.yaml")   # 이 파일 옆 (RAG-023)
 
 _DATE_SUFFIX = re.compile(r"__\d{8}")
 
 
 def logical(chunk_id: str) -> str:
-    """실제 `chunk_id` → 라벨이 쓰는 논리 주소. 수집 날짜만 떼어낸다 (D-022 ⑥B).
+    """실제 `chunk_id` → 라벨이 쓰는 논리 주소. 수집 날짜만 떼어낸다 (RAG-022 ⑥B).
 
     `law-drf-api-...-act__20260820#제15조` -> `law-drf-api-...-act#제15조`
     """
@@ -60,7 +60,7 @@ class Corpus(_Base):
 class Unavailable(_Base):
     """코퍼스 밖 참조. **분모에서 뺀다** — 세 모델이 같은 코퍼스를 쓰므로 모델 차이가 아니라 상수다.
 
-    지우지 않고 남기는 이유는 그 법령을 수집하면 `must` 로 올라가야 하기 때문이다 (D-022 ③).
+    지우지 않고 남기는 이유는 그 법령을 수집하면 `must` 로 올라가야 하기 때문이다 (RAG-022 ③).
     """
     ref: str
     reason: str
@@ -69,7 +69,7 @@ class Unavailable(_Base):
 class Item(_Base):
     id: str
     added_on: date                             # 항목별 추가일 — 시드 15건과 이후 추가를 가른다
-    origin: Literal["hand", "easylaw"]         # hand=사람 판단(D-022 ⑤) / easylaw=법제처 라벨(②)
+    origin: Literal["hand", "easylaw"]         # hand=사람 판단(RAG-022 ⑤) / easylaw=법제처 라벨(②)
     question: str
     must: list[str]                            # 없으면 답변이 틀리는 청크. Recall 의 분자·분모
     nice: list[str] = []                       # 있으면 인용이 단단해지지만 점수에는 안 들어간다
@@ -139,7 +139,7 @@ def verify(gs: GoldenSet, index: dict[str, str]) -> tuple[list[Problem], list[st
         warnings.append(
             f"코퍼스 스냅샷이 다르다 — 라벨은 {gs.corpus.collected_on} 기준인데 "
             f"현재 청크의 수집일은 {', '.join(collected)} 다. "
-            "조문 번호는 그대로여도 **개정으로 내용이 바뀌었을 수 있다** (D-022 ⑥B)"
+            "조문 번호는 그대로여도 **개정으로 내용이 바뀌었을 수 있다** (RAG-022 ⑥B)"
         )
     if len(index) != gs.corpus.chunk_count:
         warnings.append(

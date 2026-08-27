@@ -3,10 +3,10 @@
 > 상태: ✅ 확정 · 🔶 제안(논의중) · ⏸ 보류. 결정이 뒤집히면 지우지 말고 상태 변경 + 사유 추가.
 >
 > **번호 체계** — 파트②는 `RT-` 접두사를 쓰고 이 파일에만 산다. 공통 인프라와 파트①은
-> [decisions.md](decisions.md) 의 `D-` 를 계속 쓴다.
+> [decisions-rag.md](decisions-rag.md) 의 `RAG-` 를 계속 쓴다.
 >
 > 두 파트를 병렬 브랜치(`feat/rag` · `feat/realtime`)에서 동시에 진행하기 때문이다. 한 파일에 둘이
-> append 하면 **같은 번호를 각자 발급**하게 되고, 번호는 decisions.md 133회 · CLAUDE.md 30회 ·
+> append 하면 **같은 번호를 각자 발급**하게 되고, 번호는 decisions-rag.md 133회 · CLAUDE.md 30회 ·
 > 코드와 커밋 메시지까지 박히는 **사실상 불변 식별자**라 사후 재배정이 비싸다. 파일이 갈리면
 > 번호 충돌과 머지 텍스트 충돌이 함께 사라진다.
 >
@@ -17,12 +17,12 @@
 ## RT-001. 실시간 엔진 — 계층·관측 모델·판정 룰·캐시 — 🔶 진행중 (2026-08-24, ①만 확정)
 
 **배경** — 파트②는 조사(`docs/realtime-apis.md`, 2026-08-19)만 끝나 있고 **코드도 결정도 없다.**
-D-018 이 `backend/realtime/` 을 "파트② 엔진 (미착수)"로 자리만 잡아 뒀고, D-012 가 "realtime 도메인은
-저장하지 않아 크롤러 소스 모듈이 생기지 않는다", D-001 이 "Redis 를 API 응답 TTL 캐시로 재활용 예정"이라
+RAG-018 이 `backend/realtime/` 을 "파트② 엔진 (미착수)"로 자리만 잡아 뒀고, RAG-012 가 "realtime 도메인은
+저장하지 않아 크롤러 소스 모듈이 생기지 않는다", RAG-001 이 "Redis 를 API 응답 TTL 캐시로 재활용 예정"이라
 예고했을 뿐이다. P1(메인 피처)은 **조사한 API 7종 전부 연동**으로 잡았다.
 
 여섯 개를 정해야 하고 이 ADR 하나에 모은다 — 여섯이 한 엔진의 규칙이라 쪼개면 서로를 참조하는 ADR 이
-여섯 개 생긴다 (D-021 과 같은 이유).
+여섯 개 생긴다 (RAG-021 과 같은 이유).
 
 ### 논의 순서와 그 이유
 
@@ -35,7 +35,7 @@ D-018 이 `backend/realtime/` 을 "파트② 엔진 (미착수)"로 자리만 �
 | ③ | **산책 적합도 룰** | ✅ 확정 | 본체. ②의 필드가 고정돼야 논의가 닫힌다 |
 | ④ | **신선도·캐시** | ✅ 확정 | ③이 "무슨 입력이 꼭 필요한가"를 정해야 각 입력의 신선도 요구를 말할 수 있다 |
 | ⑤ | **부분 실패·저하 정책** | ✅ 확정 | ③④ 위에서만 닫힌다. 공공 API 는 실제로 자주 죽는다 |
-| ⑥ | **응답 계약** | ✅ 확정 | **일부러 마지막.** 필드는 내용에서 따라 나온다 (D-021 ⑤와 같은 이유) |
+| ⑥ | **응답 계약** | ✅ 확정 | **일부러 마지막.** 필드는 내용에서 따라 나온다 (RAG-021 ⑤와 같은 이유) |
 
 ### 재논의 비용
 
@@ -74,23 +74,23 @@ D-018 이 `backend/realtime/` 을 "파트② 엔진 (미착수)"로 자리만 �
 **관찰 2 — 데이터 축으로만 자르면 봉투를 5번 쓴다.** `resultCode` 분기, `items` 언랩, 빈 `items`,
 에러 시 JSON 이 아니라 XML 로 돌아오는 폴백 — data.go.kr 계열의 그 처리가 5개 모듈에 복사된다.
 
-**결정 — 두 축을 서로 다른 층에 둔다.** D-018 이 파서에서 푼 것과 같은 형태다.
+**결정 — 두 축을 서로 다른 층에 둔다.** RAG-018 이 파서에서 푼 것과 같은 형태다.
 
-| | D-018 파서 | 이번 realtime |
+| | RAG-018 파서 | 이번 realtime |
 |---|---|---|
 | 아래 층 | `extract/` **포맷** 층 (pdf·hwpx·html·xml) | `transport/` **전송** 층 (datagokr·kakao·kmahub) |
 | 위 층 | `parsers/` **사이트** 층 (소스 1 = 모듈 1) | `providers/` **소스** 층 (API 1 = 모듈 1) |
 | 위로 나가는 계약 | 공통 IR 6종 (`ir.py`) | 공통 관측 모델 (②) |
 
-> **경로 정정 (2026-08-24, `feat/rag` 대조)** — 위 표의 `extract/`·`parsers/`·`ir.py` 는 D-018 당시의
-> `rag/` 최상위 경로다. **D-023** 이 그 뒤 `rag/` 를 `core/`(순서 없음) + `stages/`(순서 있음) +
+> **경로 정정 (2026-08-24, `feat/rag` 대조)** — 위 표의 `extract/`·`parsers/`·`ir.py` 는 RAG-018 당시의
+> `rag/` 최상위 경로다. **RAG-023** 이 그 뒤 `rag/` 를 `core/`(순서 없음) + `stages/`(순서 있음) +
 > `pipeline.py` 로 재배치해서 지금은 `rag/stages/parse/extract/` · `.../parsers/` · `rag/core/ir.py` 다.
-> **유추는 그대로 유효하다** — D-023 이 "D-018 의 3층 자체는 그대로이고 위치만 parse 단계 안으로"라고
+> **유추는 그대로 유효하다** — RAG-023 이 "RAG-018 의 3층 자체는 그대로이고 위치만 parse 단계 안으로"라고
 > 명시했다. 층의 순서도 역할도 안 바뀌었다.
 
 ```
 backend/realtime/
-├── __main__.py       CLI — crawler·rag 와 같은 방식 (D-001 원칙 1)
+├── __main__.py       CLI — crawler·rag 와 같은 방식 (RAG-001 원칙 1)
 ├── config.py         Settings — DATA_GO_KR_KEY · KAKAO_REST_KEY · KMA_HUB_KEY
 ├── transport/        ① 전송 층 — 인증·봉투·에러코드·재시도 (3 모듈)
 │   ├── datagokr.py     serviceKey + response.header/body.items   ← 5종이 공유
@@ -121,11 +121,11 @@ backend/realtime/
 
 ### ①-3 `realtime/` 에는 `core/` 를 두지 않는다 — ✅ 확정 (2026-08-24)
 
-**왜 물어야 했나** — `crawler/` 도 `rag/`(D-023 이후) 도 `core/` 가 있다. realtime 만 없으면
+**왜 물어야 했나** — `crawler/` 도 `rag/`(RAG-023 이후) 도 `core/` 가 있다. realtime 만 없으면
 "셋 중 하나만 다른" 모양이 되고, 특히 `observation.py` 는 ②가 **provider 와 룰 사이의 계약**이라고
 못박은 것이라 `rag` 에서 정확히 같은 역할을 하는 `ir.py` 가 `core/` 에 있다는 점이 걸린다.
 
-**그런데 D-023 자신의 기준을 적용하면 두지 않는 쪽이 나온다.** `core/` 가 생긴 이유는 "**N 개가
+**그런데 RAG-023 자신의 기준을 적용하면 두지 않는 쪽이 나온다.** `core/` 가 생긴 이유는 "**N 개가
 공유하는 것**을 한자리에"였다 — 단계 7개가 `config`·`io`·`ir` 을 공유하고, crawler 는 소스 6개가
 `core/` 5개를 공유한다.
 
@@ -135,7 +135,7 @@ realtime 에서 그 N 은 `providers/` 7개인데, **걔들이 공유하는 것�
 
 남는 최상위 5개도 묶을 대상이 아니다. **"모두가 쓴다"가 아니라 각자 서로 다른 둘을 잇는다** —
 `observation` 은 providers↔rules, `geo` 는 providers↔app, `cache` 는 transport 를 감싼다.
-묶으면 `rules`·`cache` 만 폴더 밖에 남고, D-023 이 고치려던 바로 그 **"왜 얘는 폴더고 얜 파일인가"**
+묶으면 `rules`·`cache` 만 폴더 밖에 남고, RAG-023 이 고치려던 바로 그 **"왜 얘는 폴더고 얜 파일인가"**
 가 재현된다.
 
 **`stages/` 는 애초에 이식 대상이 아니다.** realtime 은 파이프라인이 아니라 **요청 시점 엔진**이다.
@@ -160,14 +160,14 @@ realtime 에는 존재하지 않는다.
 
 **왜 필요한가** — `airkorea-stations` 의 측정소 목록은 이전·증설이 있어 월 1회 갱신하는 정적 메타이고,
 `docs/realtime-apis.md` §1 이 이미 `data/reference/` 에 두기로 했다. 그러려면 `DATA_DIR` 이 필요한데
-그 탐색은 `crawler/core/config.py` 에만 있다 (D-014 "경로 탐색은 한 곳"). **`rag` 가 D-018 에서 정확히
+그 탐색은 `crawler/core/config.py` 에만 있다 (RAG-014 "경로 탐색은 한 곳"). **`rag` 가 RAG-018 에서 정확히
 같은 이유로 같은 예외를 받았다** — 두 번째 사례이므로 이제 일회성 예외가 아니라 **패턴**으로 기록한다.
 
 **왜 좁혀야 하는가** — 넓히면 realtime 이 `Fetcher`·`store`·`seed_sources` 까지 끌어오게 되고,
-그 순간 **"실시간은 저장하지 않는다"**(`data/README.md` §5, D-012)가 흐려진다. realtime 은 크롤 대상이
+그 순간 **"실시간은 저장하지 않는다"**(`data/README.md` §5, RAG-012)가 흐려진다. realtime 은 크롤 대상이
 아니고 `.meta.json` 도 만들지 않는다. 캐시하는 것은 측정소 목록 같은 **정적 메타뿐**이다.
 
-**가드를 말에서 기계로 옮긴다** — D-018 의 "`rag` 가 `crawler` 를 참조하는 것은 경로 탐색 하나뿐"은
+**가드를 말에서 기계로 옮긴다** — RAG-018 의 "`rag` 가 `crawler` 를 참조하는 것은 경로 탐색 하나뿐"은
 지금까지 **문서에만 있는 규칙**이었다. `tests/test_import_direction.py` 는 `crawler/` 디렉터리만 훑어서
 그 반대 방향을 아예 보지 않는다. 둘을 추가한다:
 
@@ -187,21 +187,21 @@ realtime 에는 존재하지 않는다.
 > 그대로 짜면 feat/rag 머지를 기다릴 것도 없이 **이 브랜치에서 바로 실패한다** (같은 파일이
 > 옛 경로 `rag/parsers/law/` 에 이미 있다). 그리고 이건 사고가 아니라 **의도된 확장**이다 —
 > `feat/rag` 의 `rag/README.md` 가 근거를 적어 뒀다: *"`cites()` 는 허위 인용 19건을 잡아낸 규칙이
-> 들어 있어 복사하면 그 지식이 갈라진다. D-018 이 정한 `rag → crawler` 의존은 경로 탐색까지였고
+> 들어 있어 복사하면 그 지식이 갈라진다. RAG-018 이 정한 `rag → crawler` 의존은 경로 탐색까지였고
 > 여기서 '한국 법령 문서 공통 텍스트 처리'까지 넓혔다"*.
 >
 > **허용 목록을 패키지별로 나눈다.** 한 줄로 뭉뚱그려 넓히면 realtime 을 좁힌 근거가 같이 사라진다.
 >
 > | 패키지 | 허용 | 근거 |
 > |---|---|---|
-> | `rag` | `crawler.core.config` · `crawler.core.textutil` | D-018 + 위 확장 |
-> | `realtime` | `crawler.core.config` **하나** | ①-2 본문 — `Fetcher`·`store`·`seed_sources` 가 들어오면 "실시간은 저장하지 않는다"(D-012)가 흐려진다 |
+> | `rag` | `crawler.core.config` · `crawler.core.textutil` | RAG-018 + 위 확장 |
+> | `realtime` | `crawler.core.config` **하나** | ①-2 본문 — `Fetcher`·`store`·`seed_sources` 가 들어오면 "실시간은 저장하지 않는다"(RAG-012)가 흐려진다 |
 >
 > `textutil` 은 **법령 텍스트 처리**라 realtime 이 쓸 일이 애초에 없다. 목록이 갈려 있어야
 > realtime 쪽에 그게 새로 들어오는 날 테스트가 잡는다.
 >
 > 가드 본체는 `crawler/` 만 훑는 지금 구조와 달리 `rglob` 로 대상 디렉터리를 훑으면 되므로
-> **D-023 의 `rag/` 재배치와 무관하게 동작한다** — 경로를 하드코딩하지 않는다.
+> **RAG-023 의 `rag/` 재배치와 무관하게 동작한다** — 경로를 하드코딩하지 않는다.
 
 ### ② 공통 관측 모델 — 🔶 진행중 (2026-08-24, ②-a 확정)
 
@@ -307,7 +307,7 @@ class Measurement:
 **아는 약점** — 룰이 `obs.latest(Q.TEMP)` 로 매번 `None` 체크를 한다. 스냅샷보다 정적 타입 안전이
 약하다. 감수하는 이유는 기준 ②이고, 뷰를 얹으면 사라진다.
 
-**선례** — D-018 이 파서에서 같은 형태를 썼다. 파서가 **공통 IR 6종**(narrow 한 요소 목록)을 내보내고
+**선례** — RAG-018 이 파서에서 같은 형태를 썼다. 파서가 **공통 IR 6종**(narrow 한 요소 목록)을 내보내고
 청커가 소비한다. 여기서는 provider 가 `Measurement` 목록을 내보내고 룰이 소비한다.
 
 #### ②-c 예보와 관측은 한 타입이고, 시각을 둘 갖는다 — ✅ 확정 (2026-08-24)
@@ -1001,7 +1001,7 @@ rt:{provider}:{operation}:{조회키}
 
 ### ④-c 저장소는 Redis, **없어도 돈다**
 
-D-001 대로 Redis 를 쓰되 연결 실패가 판정을 막지 않는다. 캐시는 가속이지 정답의 원천이 아니다.
+RAG-001 대로 Redis 를 쓰되 연결 실패가 판정을 막지 않는다. 캐시는 가속이지 정답의 원천이 아니다.
 Redis 가 없으면 매번 호출하고 ⑤-b 의 8초 예산이 그 비용을 잡는다.
 
 ### ④-d 요청이 채우고(single-flight) Beat 가 **활성 키만** 데운다
@@ -1017,7 +1017,7 @@ Beat → 활성 키만 다음 발표 시각에 맞춰 미리 갱신 · 24시간 
 ```
 
 전국을 미리 당기지 않고 **한 번이라도 쓰인 키만** 데운다. 활성 키 집합이 곧 실사용 지역이라
-사용자가 늘면 자연스럽게 따라간다. D-001 의 Celery + Beat 를 실제로 쓰는 첫 자리다.
+사용자가 늘면 자연스럽게 따라간다. RAG-001 의 Celery + Beat 를 실제로 쓰는 첫 자리다.
 
 ### ④-e ⚠️ 실제 제약 — data.go.kr **개발계정 일 1,000회** (2026-08-24 확인)
 
@@ -1177,7 +1177,7 @@ GET /walk?lat=37.4979&lon=127.0276
 
 | | | |
 |---|---|---|
-| ① 계층 | ✅ | `transport/` 3 · `providers/` 7 · **`core/` 없음(①-3)** · `realtime`→`crawler.core.config` (+ API허브 두 계열 정정 · D-023 경로 정정) |
+| ① 계층 | ✅ | `transport/` 3 · `providers/` 7 · **`core/` 없음(①-3)** · `realtime`→`crawler.core.config` (+ API허브 두 계열 정정 · RAG-023 경로 정정) |
 | ② 공통 관측 모델 | ✅ | a 3분할 · b `Measurement` 목록 · c `valid_at`+`issued_at` · d `float\|Code\|Interval`·등급·`Q` 23 · e `Observations` |
 | ③ 산책 적합도 룰 | ✅ | a `judge(obs,t)` T+24h · b 축 3·등급 3·최악 우선 · c 체감온도 기온 분기 · d 기관 앵커 임계 |
 | ④ 신선도·캐시 | ✅ | a 조회 키 · b TTL 3분리 · c Redis 선택 · d single-flight+Beat · e 일 1,000 제약 · f `N`=10 |
@@ -1262,7 +1262,7 @@ RT-001 ④·⑤-c 를 구현으로 옮기려다 계획의 빈칸 셋이 드러�
 
 ### ②-b 8단계는 Celery Beat 프리페치까지 세운다. Celery 자리는 `backend/tasks/`
 
-**빈칸** — D-001 이 "Celery + Beat + Redis" 를 확정했지만 **레포에 실물이 하나도 없다.**
+**빈칸** — RAG-001 이 "Celery + Beat + Redis" 를 확정했지만 **레포에 실물이 하나도 없다.**
 `compose.yml` 은 `db` 하나뿐이고 `pyproject.toml` 에 `celery` 도 `redis` 도 없다. 8단계 ④-c·④-d 가
 그것을 처음으로 실제로 쓰는 자리다.
 
@@ -1272,7 +1272,7 @@ RT-001 ④·⑤-c 를 구현으로 옮기려다 계획의 빈칸 셋이 드러�
 **④의 다섯 덩어리 중 프리페치(④-d)와 영속 예산(④-e 3)이 비어 8단계를 완료라고 부를 수 없다.**
 그리고 일 예산 카운터가 프로세스 메모리에 있으면 재시작마다 리셋이라 ④-e 의 제약이 시험되지 않는다.
 
-**자리는 D-009 가 이미 정해 두었다** — `backend/tasks/` 가 `crawler/`·`rag/`·`realtime/` 의 형제
+**자리는 RAG-009 가 이미 정해 두었다** — `backend/tasks/` 가 `crawler/`·`rag/`·`realtime/` 의 형제
 패키지이고 의존 방향은 `tasks → …` 한쪽이다. `test_import_direction.py` 의 `FORBIDDEN` 에 `tasks` 가
 이미 들어 있어 아래에서 위를 부르는 것은 이미 막혀 있다. **새로 막는 것은 범위다** —
 `tasks` 를 `test_import_direction_packages.py` 의 `ALLOWED` 에 `realtime` 과 같은 폭

@@ -1,4 +1,4 @@
-"""법령 Open API(DRF) XML 파서 — 조문/항/호/목 · 부칙 · 별표 (D-004, D-019, D-020).
+"""법령 Open API(DRF) XML 파서 — 조문/항/호/목 · 부칙 · 별표 (RAG-004, RAG-019, RAG-020).
 
 원본이 `<조문단위>/<항>/<호>/<목>/<별표단위>` 로 구조를 이미 명시한다. 경계를 그 태그에 맞추면
 청크 ID 가 곧 인용 문자열이 된다 (`제15조제2항제1호`). 텍스트로 뭉개면 그 복원이 불가능하다.
@@ -9,10 +9,10 @@
   - 항·호·목 내용에는 번호가 이미 붙어 있다(`① …`, `1. …`) — 따로 조립하지 않는다
   - 제2조처럼 **번호 없는 항**이 호를 감싸는 경우가 있다 (`<항>` 안에 `항번호` 가 없다)
   - 조문 텍스트에 한자 이미지 `<img src="…flDownload.do…">` 가 3건 박혀 있다 → 지우고 빈 괄호도 정리
-  - `별표구분` 은 `별표` 69 / `서식` 126. **서식은 빈 양식이라 인덱싱하지 않는다** (D-004)
+  - `별표구분` 은 `별표` 69 / `서식` 126. **서식은 빈 양식이라 인덱싱하지 않는다** (RAG-004)
 
-출처 링크 — API 호출 주소는 키가 `***` 로 마스킹돼 사람이 못 연다(D-012). `law.go.kr/법령/{법령명}`
-형식이 8종 전부 200 을 주는 것을 확인해 그것을 `citation_url` 로 쓴다. 웹 원문(D-011)을 수집하지
+출처 링크 — API 호출 주소는 키가 `***` 로 마스킹돼 사람이 못 연다(RAG-012). `law.go.kr/법령/{법령명}`
+형식이 8종 전부 200 을 주는 것을 확인해 그것을 `citation_url` 로 쓴다. 웹 원문(RAG-011)을 수집하지
 않은 수의사법·자연공원법까지 한 규칙으로 덮이고, 항상 현행을 가리킨다.
 """
 from __future__ import annotations
@@ -96,7 +96,7 @@ def _paragraphs(unit) -> list[Paragraph]:
 
 
 def _chars(head: str, paras: list[Paragraph]) -> int:
-    """청커의 2,000자 판정 입력 (D-004). 조문 전체가 몇 자인지."""
+    """청커의 2,000자 판정 입력 (RAG-004). 조문 전체가 몇 자인지."""
     n = len(head)
     for p in paras:
         n += len(p.text) + sum(len(i.text) + sum(len(s.text) for s in i.subitems) for i in p.items)
@@ -164,7 +164,7 @@ def _attachment(unit, doc_id: str, warnings: list[str]) -> list:
             out.append(Table(id=eid, title=title, section=section, unit=unit_note,
                              header=block.header, rows=block.rows, related=related, files=files))
         else:
-            # 헤더/본문 구분이 없는 단일 칸 박스 — 과징금 산식 같은 도식이라 버리면 안 된다 (D-020)
+            # 헤더/본문 구분이 없는 단일 칸 박스 — 과징금 산식 같은 도식이라 버리면 안 된다 (RAG-020)
             out.append(Aside(id=eid, title=title, section=section,
                              lines=[c for row in block.rows for c in row if c]))
     return out
@@ -208,7 +208,7 @@ def parse(raw: bytes, doc: RawDoc) -> Parsed:
 
     for att in soup.find_all("별표단위"):
         if _text(att, "별표구분") == "서식":
-            skipped_forms += 1                 # 빈 양식 텍스트라 검색 노이즈다 (D-004)
+            skipped_forms += 1                 # 빈 양식 텍스트라 검색 노이즈다 (RAG-004)
             continue
         elements.extend(_attachment(att, doc_id, warnings))
 

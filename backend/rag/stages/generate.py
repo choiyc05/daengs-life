@@ -1,11 +1,11 @@
-"""9단계 생성 — 검색 결과 위에 Gemini 로 답을 만든다 (D-028).
+"""9단계 생성 — 검색 결과 위에 Gemini 로 답을 만든다 (RAG-028).
 
-**조립 순서가 사는 곳이 여기다** (D-028 ③). `/ask` 와 `rag generate` 가 같은 순서
-(`인코딩 → search → 프롬프트 → Gemini`)를 밟는데, 그것을 라우터와 CLI 에 각각 적으면 D-003 이
+**조립 순서가 사는 곳이 여기다** (RAG-028 ③). `/ask` 와 `rag generate` 가 같은 순서
+(`인코딩 → search → 프롬프트 → Gemini`)를 밟는데, 그것을 라우터와 CLI 에 각각 적으면 RAG-003 이
 8·9단계 사이에 끼는 날 고칠 곳이 둘이 된다 — `pipeline.py` 가 이미 그 자리를 예고해 놨다.
-D-027 은 이 조립을 `app/services/ask.py` 에 두라고 하지만, `rag` 는 `app` 을 import 할 수 없어
-(D-014) **`rag generate --questions`(검문소④)가 그 코드를 못 쓴다.** 그러면 검문소가 서빙과
-다른 코드를 검사하게 되고, 그것이 D-026 ②가 8단계에서 막은 상태 그대로다.
+RAG-027 은 이 조립을 `app/services/ask.py` 에 두라고 하지만, `rag` 는 `app` 을 import 할 수 없어
+(RAG-014) **`rag generate --questions`(검문소④)가 그 코드를 못 쓴다.** 그러면 검문소가 서빙과
+다른 코드를 검사하게 되고, 그것이 RAG-026 ②가 8단계에서 막은 상태 그대로다.
 
 함수가 둘인 이유 —
 - `answer(question, hits)` 는 **순수**하다. 검색 결과를 받으므로 DB 도 모델도 없이 테스트된다
@@ -13,7 +13,7 @@ D-027 은 이 조립을 `app/services/ask.py` 에 두라고 하지만, `rag` 는
 
 **프롬프트는 일부러 순진하다.** 검문소③이 이미 알려준 것은 "검증질문 7개 중 5개는 top-5 안에
 정답 조항이 없다"이고, 1랩이 **새로** 알려주는 것은 그 상태에서 LLM 이 지어내는지 물러서는지다.
-근거 부족 시 거부를 프롬프트로 부탁할지 구조로 막을지는 **한 랩 돌려본 뒤** 정한다(D-029).
+근거 부족 시 거부를 프롬프트로 부탁할지 구조로 막을지는 **한 랩 돌려본 뒤** 정한다(RAG-029).
 지금 방어 장치를 넣으면 관찰하려던 것을 지운다.
 """
 from __future__ import annotations
@@ -31,7 +31,7 @@ from .search import Hit
 VERSION = 1
 
 # 답변에 조항 번호를 요구한다 — KPI("출처 링크 + 조항 번호 인용") 자체이고, 요구하지 않으면
-# 검문소④가 셀 것이 없어진다. 거부는 **부탁하지 않는다**(D-029 가 그 자리다).
+# 검문소④가 셀 것이 없어진다. 거부는 **부탁하지 않는다**(RAG-029 가 그 자리다).
 PROMPT = """당신은 한국의 반려동물 관련 제도를 안내하는 도우미입니다.
 
 아래 [참고자료]를 근거로 [질문]에 답하세요.
@@ -59,7 +59,7 @@ class _Base(BaseModel):
 class Answer:
     """답변 하나 + **그 답을 만든 근거 전부**.
 
-    `hits` 를 들고 다니는 것이 D-028 ②다 — 1랩의 `/ask` 는 제품이 아니라 **검문소④가 읽는 관찰
+    `hits` 를 들고 다니는 것이 RAG-028 ②다 — 1랩의 `/ask` 는 제품이 아니라 **검문소④가 읽는 관찰
     도구**이고, 무엇을 컨텍스트로 줬는지 함께 말하지 않으면 "인용한 조항이 실재했나"를 셀 수 없다.
     """
     question: str
@@ -77,7 +77,7 @@ class Answer:
 
 # ---------------------------------------------------------------- 프롬프트
 def build_context(hits: list[Hit]) -> str:
-    """참고자료 블록. **`content` 를 자르지 않는다** (D-028 ②).
+    """참고자료 블록. **`content` 를 자르지 않는다** (RAG-028 ②).
 
     검문소③ B 가 찾은 상황 때문이다 — easylaw 해설 청크는 `citation` 이 해설 주소인데 **본문 안에
     「동물보호법」 제2조 같은 조항 번호가 박혀 있다.** 자르면 모델이 그걸 보고 인용했는지, 지어냈는지
@@ -110,7 +110,7 @@ def ungrounded_articles(text: str, hits: list[Hit]) -> list[str]:
 
     ⚠️ **느슨한 검사다.** `제2조` 가 컨텍스트의 *다른 법령* 제2조로 맞아 버릴 수 있어 실제보다
     적게 나온다. 그래도 이 방향의 오차가 옳다 — 1 이상이면 그것은 **확실히** 지어낸 것이고,
-    "0이면 프롬프트로 충분하다"는 판정은 D-029 에서 더 엄한 검사로 다시 본다.
+    "0이면 프롬프트로 충분하다"는 판정은 RAG-029 에서 더 엄한 검사로 다시 본다.
     법령명까지 짝지어 대조하는 것이 KPI 에 맞지만, 그 정밀도는 관찰이 아니라 **방어 장치**의
     일이고 방어 장치는 1랩을 보고 나서 정한다.
     """
@@ -158,7 +158,7 @@ def ask(question: str, *, k: int = search.DEFAULT_K, include_supplementary: bool
     올리고, 서버는 lifespan 이 올린 것을 넘긴다.
 
     `include_supplementary` 기본이 `True` 인 것은 **엔진의 기본값**이지 서빙의 기본값이 아니다.
-    서빙 정책은 `app/services/ask.py` 가 갖는다 — D-026 ①이 *"검사 도구와 서빙이 같은 기본값을
+    서빙 정책은 `app/services/ask.py` 가 갖는다 — RAG-026 ①이 *"검사 도구와 서빙이 같은 기본값을
     쓸 이유가 없다"* 며 비워 둔 자리이고, 값은 1랩을 돌고 정한다.
     """
     key = model_key or config.settings.embedding_model_key
@@ -172,9 +172,9 @@ def ask(question: str, *, k: int = search.DEFAULT_K, include_supplementary: bool
     return answer(question, hits, client=client, model=model, embedding_model=key)
 
 
-# ---------------------------------------------------------------- 덤프 (D-028 ⑥)
+# ---------------------------------------------------------------- 덤프 (RAG-028 ⑥)
 class DumpHeader(_Base):
-    """랩 하나의 전제. **코퍼스 스냅샷이 여기 있어야 2랩 비교가 성립한다** (D-024 ④와 같은 규약)."""
+    """랩 하나의 전제. **코퍼스 스냅샷이 여기 있어야 2랩 비교가 성립한다** (RAG-024 ④와 같은 규약)."""
     type: str = "header"
     version: int = VERSION
     lap: str
@@ -190,13 +190,13 @@ class DumpHit(_Base):
     rank: int
     score: float
     chunk_id: str
-    logical: str                      # 수집 날짜를 뺀 주소 (D-028 ⑥ⓑ)
+    logical: str                      # 수집 날짜를 뺀 주소 (RAG-028 ⑥ⓑ)
     citation: str
     tier: str                         # must / nice / -
 
 
 class DumpRow(_Base):
-    """문항 하나. **비교 축 셋이 전부 여기 있다** (D-028 ⑥ⓐ) — `hit_ids`·`cited`·`ungrounded`.
+    """문항 하나. **비교 축 셋이 전부 여기 있다** (RAG-028 ⑥ⓐ) — `hit_ids`·`cited`·`ungrounded`.
 
     `text` 도 남기지만 **비교 축이 아니다.** LLM 이 비결정적이라 답변 문장을 대조하면 랩 사이의
     차이가 코퍼스 때문인지 샘플링 때문인지 안 갈린다. 눈으로 읽으려고 남길 뿐이다.

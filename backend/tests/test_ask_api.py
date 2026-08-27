@@ -1,11 +1,11 @@
-"""`POST /ask` — API 레벨 (D-027 · D-028).
+"""`POST /ask` — API 레벨 (RAG-027 · RAG-028).
 
 **모델도 DB 도 Gemini 도 부르지 않는다.** `deps.py` 가 존재하는 두 번째 이유(*"테스트가 여기를
 갈아끼운다"*)를 그대로 쓴다 — `dependency_overrides` 로 인코더와 커넥션을 갈아끼우고, 생성은
 `services.ask` 가 부르는 `generate.ask` 를 monkeypatch 로 막는다.
 
 `test_walk_api.py` 가 검문소 D 를 API 레벨에서 다시 돌린 것과 같은 자리이지만, **여기서 검문소④를
-다시 돌리지는 않는다.** 검문소④는 CLI(`rag generate --questions`)에 있고, 그것이 D-028 ③이 조립을
+다시 돌리지는 않는다.** 검문소④는 CLI(`rag generate --questions`)에 있고, 그것이 RAG-028 ③이 조립을
 `rag` 에 둔 이유다. 여기서 붙잡는 것은 **계약과 경계**다.
 """
 from __future__ import annotations
@@ -47,7 +47,7 @@ def client(monkeypatch: pytest.MonkeyPatch):
 
 
 def test_answers_with_its_evidence(client: TestClient) -> None:
-    """**D-028 ② — 답변만 주면 검문소④를 만들 수 없다.** 무엇을 컨텍스트로 줬는지 함께 말한다."""
+    """**RAG-028 ② — 답변만 주면 검문소④를 만들 수 없다.** 무엇을 컨텍스트로 줬는지 함께 말한다."""
     r = client.post("/ask", json={"question": "목줄 안 하면 과태료 얼마인가요?"})
     assert r.status_code == 200
     d = r.json()
@@ -61,19 +61,19 @@ def test_kpi_fields_survive_the_dto(client: TestClient) -> None:
 
 
 def test_content_is_not_truncated(client: TestClient) -> None:
-    """근거 본문을 자르지 않는다 (D-028 ②). 자르면 인용이 옳은 읽기인지 판정할 수 없다."""
+    """근거 본문을 자르지 않는다 (RAG-028 ②). 자르면 인용이 옳은 읽기인지 판정할 수 없다."""
     h = client.post("/ask", json={"question": "q"}).json()["hits"][0]
     assert h["content"] == HITS[0].content
 
 
 def test_both_model_names_are_reported(client: TestClient) -> None:
-    """랩 비교는 **둘 다** 있어야 성립한다 — 답을 만든 모델과 검색에 쓴 모델 (D-028 ⑥)."""
+    """랩 비교는 **둘 다** 있어야 성립한다 — 답을 만든 모델과 검색에 쓴 모델 (RAG-028 ⑥)."""
     d = client.post("/ask", json={"question": "q"}).json()
     assert d["model"] == "gemini-fake" and d["embedding_model"] == "bge-m3"
 
 
 def test_empty_question_is_rejected_by_the_contract(client: TestClient) -> None:
-    """검증은 DTO 가 한다 — 컨트롤러에 로직을 넣지 않기 위해서다 (D-027 강제 규칙)."""
+    """검증은 DTO 가 한다 — 컨트롤러에 로직을 넣지 않기 위해서다 (RAG-027 강제 규칙)."""
     assert client.post("/ask", json={"question": ""}).status_code == 422
 
 
@@ -81,7 +81,7 @@ def test_no_evidence_means_no_answer(client: TestClient, monkeypatch: pytest.Mon
     """**근거 0건이면 생성하지 않는다.** 빈 컨텍스트로 Gemini 에 넘기면 그것은 검색 결과 위의
     답이 아니라 모델의 기억이고, KPI(출처 링크 + 조항 번호)가 성립할 수 없다.
 
-    ⚠️ 이것은 D-029(근거가 *약할* 때의 거부)가 아니라 **아예 없는** 경우의 처리다.
+    ⚠️ 이것은 RAG-029(근거가 *약할* 때의 거부)가 아니라 **아예 없는** 경우의 처리다.
     """
     empty = Answer(question="q", text="", hits=[], model="m", embedding_model="bge-m3")
     monkeypatch.setattr(service.generate, "ask", lambda *a, **k: empty)
@@ -110,7 +110,7 @@ def test_upstream_failure_says_which_upstream(client: TestClient,
 
 
 def test_walk_still_registered() -> None:
-    """`/ask` 를 붙이면서 `main.py` 에서 겹치는 것은 **등록 한 줄**이어야 한다 (D-027 마지막 절).
+    """`/ask` 를 붙이면서 `main.py` 에서 겹치는 것은 **등록 한 줄**이어야 한다 (RAG-027 마지막 절).
     파트②의 엔드포인트가 사라지면 그 약속이 깨진 것이다."""
     # `app.routes` 는 이 FastAPI 버전에서 지연 등록(`_IncludedRouter`)이라 경로가 안 보인다.
     # OpenAPI 스키마를 보면 **실제로 공개되는 계약**을 보게 되므로 이쪽이 더 옳은 검사이기도 하다.

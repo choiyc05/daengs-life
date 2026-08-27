@@ -1,7 +1,7 @@
-"""6단계 3파전 — 골든셋으로 임베딩 3종을 채점하고 **승자 하나를 고른다** (D-024).
+"""6단계 3파전 — 골든셋으로 임베딩 3종을 채점하고 **승자 하나를 고른다** (RAG-024).
 
 계획서에 모순이 하나 있었다. 검문소②는 "15건이라 통계적 판정은 불가"라고 말하는데 7단계는
-1종을 요구한다. D-024 가 그 모순을 푼 방식은 **되돌리는 비용**에서 출발한다 — parquet 3벌이
+1종을 요구한다. RAG-024 가 그 모순을 푼 방식은 **되돌리는 비용**에서 출발한다 — parquet 3벌이
 이미 디스크에 있어 재적재가 몇 분이므로 **6단계는 최선을 증명할 필요가 없다.** 명백히 나쁜
 것만 버리고 나머지는 결과를 보기 전에 정한 규칙으로 집으면 된다.
 
@@ -12,10 +12,10 @@
   ① 사전 등록 + 기준선 우선 — 탈락 후 남은 것들의 점수차는 **읽지 않는다**. 둘 이상 남으면 `bge-m3`
   ② 판정 k = 5 — 변별력과 운영 k(검문소③ top-5)가 같은 답을 가리켰다. 표에는 1·3·5·10 전부
   ③ 탈락선 = `Hit@5`(문항 균등), 2문항 차. `Recall`·`MRR` 은 **산출·기록하되 승자 규칙에 안 들어간다**
-  ④ 덤프는 `data/processed/eval/` 미추적, 판정 요약은 D-024 에 붙인다
+  ④ 덤프는 `data/processed/eval/` 미추적, 판정 요약은 RAG-024 에 붙인다
 
 **`Hit` 이 KPI 와 어긋난다는 것은 알고 쓴다.** Q4(로트와일러)는 법 제2조와 시행규칙 제2조가
-둘 다 있어야 인용이 성립하는데 `Hit` 은 하나만 걸려도 만점이다. 그 대가는 D-024 ③에 적혀 있고,
+둘 다 있어야 인용이 성립하는데 `Hit` 은 하나만 걸려도 만점이다. 그 대가는 RAG-024 ③에 적혀 있고,
 인용의 온전함은 8단계 검문소③이 잡는다. 여기서 `Recall` 을 승자 규칙에 슬쩍 넣으면
 "Hit 은 동률인데 Recall 이 높으니 이쪽"이 되어 ①의 사전 등록이 뒷문으로 무너진다.
 """
@@ -30,12 +30,12 @@ from . import embed, goldenset
 
 VERSION = 1
 
-KS: tuple[int, ...] = (1, 3, 5, 10)   # 표에 싣는 k 전부 (D-024 ②)
+KS: tuple[int, ...] = (1, 3, 5, 10)   # 표에 싣는 k 전부 (RAG-024 ②)
 JUDGE_K = 5                           # 그중 **탈락선이 읽는** 단 하나
 CUT_GAP = 2                           # 최고보다 이만큼 낮으면 탈락. 15분의 1 = 6.7%p 눈금이라 1은 우연이다
 DUMP_TOP = 10                         # 덤프에 남기는 깊이. 검문소②가 눈으로 보는 것
 
-# **사전 순위** (D-024 ①). 기준선이 맨 앞이고, 이 순서는 `embed.MODELS` 등록 순서 그대로다.
+# **사전 순위** (RAG-024 ①). 기준선이 맨 앞이고, 이 순서는 `embed.MODELS` 등록 순서 그대로다.
 # ① 은 "둘 이상 남으면 bge-m3" 라고만 적혀 있어 **기준선이 탈락한 경우를 말하지 않는다.**
 # 그 자리를 순위로 일반화했다 — 결과를 보고 정하는 자리가 생기면 사전 등록이 무너지므로,
 # 일어나지 않을 것 같은 경우에도 규칙이 먼저 있어야 한다.
@@ -47,11 +47,11 @@ class _Base(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-# ---------------------------------------------------------------- 지표 (D-024 ③)
+# ---------------------------------------------------------------- 지표 (RAG-024 ③)
 def item_metrics(must_ranks: list[int], ks: tuple[int, ...] = KS) -> dict[str, Any]:
     """한 문항의 지표. 입력은 **필수 라벨 각각이 랭킹에서 몇 위인가**(1-based) 뿐이다.
 
-    검색과 분리해 둔 이유 — 지표 정의는 D-024 ③ 의 결정이고, 벡터나 데이터 없이 손계산으로
+    검색과 분리해 둔 이유 — 지표 정의는 RAG-024 ③ 의 결정이고, 벡터나 데이터 없이 손계산으로
     검증할 수 있어야 한다. `tests/test_evaluate.py` 가 여기만 붙잡는다.
 
     - `hit@k`   필수가 **하나라도** top-k 에 있으면 1. 이진값이라 문항 균등 말고 다른 평균이 없다
@@ -68,26 +68,26 @@ def item_metrics(must_ranks: list[int], ks: tuple[int, ...] = KS) -> dict[str, A
 
 
 def macro(per_item: list[dict[str, Any]], field: str, k: int) -> float:
-    """문항 균등 평균 (D-024 ③).
+    """문항 균등 평균 (RAG-024 ③).
 
     43쌍을 통으로 세는 micro 를 쓰지 않는 이유는 easylaw 가 31/43 = 72% 를 지배하기 때문이다.
     그 라벨이 많은 건 그 문항이 어려워서가 아니라 **법제처 목록을 통째로 차용**했기 때문이라
-    (D-022 ②), micro 는 라벨링 출처의 차이를 그대로 채점 가중치로 바꾼다.
+    (RAG-022 ②), micro 는 라벨링 출처의 차이를 그대로 채점 가중치로 바꾼다.
     """
     return sum(m[field][k] for m in per_item) / len(per_item) if per_item else 0.0
 
 
-# ---------------------------------------------------------------- 판정 (D-024 ①③)
+# ---------------------------------------------------------------- 판정 (RAG-024 ①③)
 class Verdict(_Base):
     hits: dict[str, int]              # 모델 → Hit@5 를 맞힌 문항 수 (15점 만점)
     survivors: list[str]
     eliminated: list[str]
     winner: str
-    rule: str                         # ① 의 어느 줄이 적용됐나 — 요약에 반드시 들어간다 (D-024 ④)
+    rule: str                         # ① 의 어느 줄이 적용됐나 — 요약에 반드시 들어간다 (RAG-024 ④)
 
 
 def judge(hits: dict[str, int]) -> Verdict:
-    """`Hit@5` 의 **문항 수**만 보고 승자를 정한다. 점수는 보지 않는다 (D-024 ①③).
+    """`Hit@5` 의 **문항 수**만 보고 승자를 정한다. 점수는 보지 않는다 (RAG-024 ①③).
 
     입력이 `dict[모델, 문항 수]` 뿐인 것이 이 함수의 요지다 — Recall 이나 MRR 을 인자로 받지
     않으므로 "동률인데 Recall 이 높으니" 가 코드에 들어올 자리가 없다.
@@ -100,15 +100,15 @@ def judge(hits: dict[str, int]) -> Verdict:
     if len(survivors) == 1:
         rule = f"탈락으로 갈렸다 — 나머지가 Hit@{JUDGE_K} 에서 {CUT_GAP}문항 이상 낮다"
     elif survivors[0] == BASELINE:
-        rule = (f"동률(최대 {CUT_GAP - 1}문항 차)이라 점수차를 읽지 않고 기준선을 쓴다 — D-024 ①")
+        rule = (f"동률(최대 {CUT_GAP - 1}문항 차)이라 점수차를 읽지 않고 기준선을 쓴다 — RAG-024 ①")
     else:
         rule = (f"동률이라 사전 순위로 집었다. **기준선 {BASELINE} 이 탈락한 경우**이고 "
-                f"D-024 ① 이 명시하지 않은 자리다 — ADR 에 이 실행을 근거로 한 줄 추가할 것")
+                f"RAG-024 ① 이 명시하지 않은 자리다 — ADR 에 이 실행을 근거로 한 줄 추가할 것")
     return Verdict(hits=hits, survivors=survivors, eliminated=eliminated,
                    winner=survivors[0], rule=rule)
 
 
-# ---------------------------------------------------------------- 산출물 (D-024 ④)
+# ---------------------------------------------------------------- 산출물 (RAG-024 ④)
 class EvalItem(_Base):
     type: str = "eval"
     item_id: str
@@ -244,12 +244,12 @@ def write_dump(key: str, items: list[EvalItem], gs: goldenset.GoldenSet,
     return io.write_eval(header, items)
 
 
-# ---------------------------------------------------------------- 요약 (D-024 ④ 필수 4항)
+# ---------------------------------------------------------------- 요약 (RAG-024 ④ 필수 4항)
 def markdown(summaries: dict[str, dict[str, Any]], verdict: Verdict,
              gs: goldenset.GoldenSet, fingerprint: str, chunk_count: int) -> str:
-    """**그대로 D-024 에 붙일 markdown.** 덤프가 미추적이라 이것이 뒤에 남는 전부다.
+    """**그대로 RAG-024 에 붙일 markdown.** 덤프가 미추적이라 이것이 뒤에 남는 전부다.
 
-    네 가지가 반드시 들어간다 (D-024 ④): 점수표 · `Hit@5=0` 문항 id · ① 의 어느 줄이
+    네 가지가 반드시 들어간다 (RAG-024 ④): 점수표 · `Hit@5=0` 문항 id · ① 의 어느 줄이
     적용됐나 · 코퍼스 스냅샷.
     """
     n = len(gs.items)
@@ -282,6 +282,6 @@ def markdown(summaries: dict[str, dict[str, Any]], verdict: Verdict,
         out.append(f"탈락: {', '.join(verdict.eliminated)} "
                    f"(`Hit@{JUDGE_K}` 기준 {CUT_GAP}문항 이상 낮다)")
     out.append("")
-    out.append(f"> `Recall`·`MRR`·`Hit@1·@3` 은 기록만 한다 — 승자 규칙에 들어가지 않는다 (D-024 ③).")
+    out.append(f"> `Recall`·`MRR`·`Hit@1·@3` 은 기록만 한다 — 승자 규칙에 들어가지 않는다 (RAG-024 ③).")
     out.append(f"> 인용의 온전함(`must` 를 다 건졌나)은 8단계 검문소③이 눈으로 잡는다.")
     return "\n".join(out)

@@ -1,6 +1,6 @@
 # crawler/
 
-오케스트레이터 무관 순수 파이썬 패키지 + CLI (D-001 원칙 1). `app/`·`tasks/` 를 import 하지 않는다.
+오케스트레이터 무관 순수 파이썬 패키지 + CLI (RAG-001 원칙 1). `app/`·`tasks/` 를 import 하지 않는다.
 
 ```
 crawler/
@@ -47,15 +47,15 @@ registry 는 모듈 안에서 `__module__` 이 그 모듈인 `Source` 하위 클
 
 `backend/.env` 에 넣는다 (`backend/.env.example` 참고). 이름은 `docs/data-sources.md` §9 와 같다.
 
-`core/config.py` 의 `Settings(BaseSettings)` 가 **pydantic-settings** 로 읽는다 (D-015).
+`core/config.py` 의 `Settings(BaseSettings)` 가 **pydantic-settings** 로 읽는다 (RAG-015).
 값을 추가하려면 필드를 선언하면 되고, 키라면 `_SECRET_FIELDS` 에도 이름을 넣어 마스킹 대상으로 만든다.
 
-읽는 순서는 **실제 환경변수 > `backend/.env` > 레포 루트 `.env`** (D-014).
+읽는 순서는 **실제 환경변수 > `backend/.env` > 레포 루트 `.env`** (RAG-014).
 두 파일은 병합된다 — 루트에만 있는 값도 올라오고, 겹치면 backend 쪽이 이긴다.
 배포에서는 오케스트레이터가 넣은 환경변수가 항상 이기므로 파일이 없어도 그대로 돈다.
 
 **키가 URL 에 들어가는 소스는 저장·로그·출력 전에 `config.redact()` 를 통과한다.**
-`.meta.json` 은 이제 커밋되지 않지만(D-017), 키가 박힌 URL 은 그대로 재사용 가능한 자격증명이라
+`.meta.json` 은 이제 커밋되지 않지만(RAG-017), 키가 박힌 URL 은 그대로 재사용 가능한 자격증명이라
 로컬 파일·로그·화면 어디에도 남기지 않는다. 새 API 소스를 만들 때 확인할 것.
 
 `data/` 위치는 레포 안에서 실행하면 자동으로 찾는다. 레포 밖(컨테이너)에서는 `DAENGS_DATA_DIR` 로
@@ -70,10 +70,10 @@ uv run pytest
 ```
 
 - `test_import_direction.py` — `crawler` 안의 import 문을 AST 로 훑어 `app`·`tasks`·`main` 을
-  끌어다 쓰지 않는지 검사한다 (D-009 의존 방향, D-014). 검사기가 살아 있는지 확인하는 테스트가
+  끌어다 쓰지 않는지 검사한다 (RAG-009 의존 방향, RAG-014). 검사기가 살아 있는지 확인하는 테스트가
   한 개 더 있다 — 검사기가 조용히 아무것도 안 보게 되면 그쪽이 먼저 실패한다.
 - `test_config_env.py` — 설정 우선순위, `.env` 파싱(주석·export·따옴표), 키 마스킹,
-  레포 밖 실행 (D-014, D-015).
+  레포 밖 실행 (RAG-014, RAG-015).
 
 ## 실행
 
@@ -100,7 +100,7 @@ uv run python -m crawler run --source easylaw-pet --force       # sha256 같고 
 3. **시험** — `--dry-run --limit 3`. 제목이 비거나 메뉴가 본문으로 잡히면 여기서 잡는다.
    API 소스는 여기서 `.meta.json` 의 `source_url` 에 키가 가려졌는지 반드시 눈으로 확인.
 4. **수집** — `run --source {id}`. `data/raw/{domain}/` 에 원본 + meta, `crawl_log.jsonl` 에 한 줄씩.
-5. **기록** — `data/` 의 수집 결과물은 **커밋하지 않는다** (원본·meta·크롤로그 전부 로컬, D-017).
+5. **기록** — `data/` 의 수집 결과물은 **커밋하지 않는다** (원본·meta·크롤로그 전부 로컬, RAG-017).
    대신 `docs/data-sources.md` 체크리스트에 수집 완료를 표시하고,
    `data/README.md` 값 사전(subcategory 표)에 새 값을 추가한다.
 
@@ -114,7 +114,7 @@ uv run python -m crawler run --source easylaw-pet --force       # sha256 같고 
 - `sha256` 은 html 이면 `extract().text` 해시, 그 외는 원본 바이트 해시. `store.py` 주석 참고.
 - 같은 slug 의 최신 `.meta.json` 과 지문이 같으면 아무것도 안 쓰고 로그만 `changed:false`.
   다르면 오늘 날짜로 새 파일 (옛 파일 보존 — 원본 불변).
-- **지문이 같아도 meta 의 `raw_file` 이 디스크에 없으면 다시 받는다** (D-010, 출력 라벨 `RAW-MISSING`).
+- **지문이 같아도 meta 의 `raw_file` 이 디스크에 없으면 다시 받는다** (RAG-010, 출력 라벨 `RAW-MISSING`).
   `data/` 를 PC 사이에 복사했거나 용량 때문에 원본만 지운 경우, 그대로 두면 전부 `same` 으로 스킵돼
   파싱 단계가 빈손이 된다. `--force` 없이 그냥 `run` 하면 없는 것만 채워진다.
 - 왜 받았는지는 `crawl_log.jsonl` 의 `reason`: `new`/`changed`/`raw-missing`/`forced`/`same`.

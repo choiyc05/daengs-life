@@ -1,6 +1,6 @@
-"""8단계 검색 테스트 — 계약과 경계를 본다 (D-026).
+"""8단계 검색 테스트 — 계약과 경계를 본다 (RAG-026).
 
-**여기서 지키는 것 중 가장 중요한 것은 `search()` 의 시그니처다.** D-003(하이브리드·리랭커)이
+**여기서 지키는 것 중 가장 중요한 것은 `search()` 의 시그니처다.** RAG-003(하이브리드·리랭커)이
 들어오면 **바뀌어야 하는 것은 이 함수의 내부이지 시그니처가 아니다** — 호출하는 쪽(CLI·9단계·
 FastAPI)이 검색 방식을 알면 그 교체가 세 곳을 고치는 일이 되고, 검문소③이 확인한 것과 서빙이
 하는 것이 달라진다.
@@ -20,7 +20,7 @@ pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
 
 # ---------------------------------------------------------------- 상수 = 결정
 def test_default_k_matches_the_judged_k() -> None:
-    """검문소③이 보는 수 = D-024 ②의 판정 k.
+    """검문소③이 보는 수 = RAG-024 ②의 판정 k.
 
     다르면 6단계 점수와 8단계 인상이 어긋나도 원인을 못 짚는다.
     """
@@ -28,7 +28,7 @@ def test_default_k_matches_the_judged_k() -> None:
 
 
 def test_supplementary_is_included_by_default() -> None:
-    """D-026 ① — **기본은 부칙을 보여준다.**
+    """RAG-026 ① — **기본은 부칙을 보여준다.**
 
     검문소③은 사람이 눈으로 보는 검사 자리이고, 기본값이 이미 걸러진 결과면 **무엇이 걸러졌는지**
     를 볼 수 없다. 서빙(9단계)의 기본값은 여기서 정하지 않는다 — 검사 도구와 서빙이 같은
@@ -38,7 +38,7 @@ def test_supplementary_is_included_by_default() -> None:
 
 
 def test_search_signature_is_the_boundary() -> None:
-    """D-026 ② — D-003 이 와도 **내부만** 바뀌어야 한다.
+    """RAG-026 ② — RAG-003 이 와도 **내부만** 바뀌어야 한다.
 
     이 목록이 바뀌면 CLI·9단계·FastAPI 가 같이 바뀐다는 뜻이고, 그때는 의도한 변경인지
     확인해야 한다.
@@ -47,7 +47,7 @@ def test_search_signature_is_the_boundary() -> None:
     assert params == ["query_vector", "k", "include_supplementary", "category", "conn"]
 
 
-# ---------------------------------------------------------------- 골든셋에서 질문을 읽는다 (D-026 ②)
+# ---------------------------------------------------------------- 골든셋에서 질문을 읽는다 (RAG-026 ②)
 def test_questions_come_from_the_goldenset() -> None:
     """검증질문 1~7 을 코드에 박지 않는다 — 박으면 질문 목록의 단일 소스가 둘이 된다."""
     items = search.hand_questions()
@@ -63,7 +63,7 @@ def test_every_hand_question_has_a_must_label() -> None:
 
 
 def test_tier_strips_the_collection_date() -> None:
-    """라벨은 **수집 날짜를 뺀 논리 주소**다 (D-022 ⑥B). 실제 `chunk_id` 에는 날짜가 있다."""
+    """라벨은 **수집 날짜를 뺀 논리 주소**다 (RAG-022 ⑥B). 실제 `chunk_id` 에는 날짜가 있다."""
     must = {"law-drf-api-animal-protection-act#제18조"}
     real = "law-drf-api-animal-protection-act__20260820#제18조"
     assert search.tier_of(real, must, set()) == "must"
@@ -110,7 +110,7 @@ def test_hits_carry_the_citation_fields(vector) -> None:
 
 
 def test_no_supplementary_actually_filters(vector) -> None:
-    """플래그가 실제로 부칙을 뺀다. 안 빠지면 D-026 ① 의 비교 자체가 성립하지 않는다."""
+    """플래그가 실제로 부칙을 뺀다. 안 빠지면 RAG-026 ① 의 비교 자체가 성립하지 않는다."""
     with _ready_or_skip() as conn:
         wide = search.search(vector, k=50, conn=conn)
         narrow = search.search(vector, k=50, include_supplementary=False, conn=conn)

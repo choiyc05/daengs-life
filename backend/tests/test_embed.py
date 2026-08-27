@@ -1,4 +1,4 @@
-"""임베딩 테스트 — 계약과 가드만 본다 (D-002, D-021 ②).
+"""임베딩 테스트 — 계약과 가드만 본다 (RAG-002, RAG-021 ②).
 
 **가중치를 로드하는 테스트는 여기 두지 않는다.** `bge-m3` 하나가 6.5GB 라 `pytest` 가 분 단위로
 느려지고, 그러면 아무도 안 돌린다. 대신 나눈다.
@@ -6,7 +6,7 @@
   - 여기(기본) — 레지스트리·산출물 계약·토큰 가드. 토크나이저만 쓰거나 파일만 읽는다
   - `-m slow` — 실제 인코딩. `uv run pytest -m slow` 로 따로 돌린다
 
-`data/` 는 git 미추적이라(D-017) 청크나 parquet 이 없으면 실패가 아니라 skip 이다.
+`data/` 는 git 미추적이라(RAG-017) 청크나 parquet 이 없으면 실패가 아니라 skip 이다.
 """
 from __future__ import annotations
 
@@ -17,14 +17,14 @@ from rag.stages import embed
 pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
 
 
-# ---------------------------------------------------------------- 레지스트리 (D-002)
+# ---------------------------------------------------------------- 레지스트리 (RAG-002)
 def test_three_models() -> None:
     """3파전이므로 셋이다. 늘거나 줄면 6단계 비교의 전제가 바뀐다."""
     assert list(embed.MODELS) == ["bge-m3", "kure-v1", "qwen3-embedding-0.6b"]
 
 
 def test_official_repos() -> None:
-    """정식 식별자는 `documents.metadata.embedding_model` 로 그대로 간다 (D-008)."""
+    """정식 식별자는 `documents.metadata.embedding_model` 로 그대로 간다 (RAG-008)."""
     assert [m.repo for m in embed.MODELS.values()] == [
         "BAAI/bge-m3", "nlpai-lab/KURE-v1", "Qwen/Qwen3-Embedding-0.6B",
     ]
@@ -35,7 +35,7 @@ def test_qwen_query_prompt_is_official() -> None:
 
     이 문구는 모델 저장소의 `config_sentence_transformers.json` 을 그대로 옮긴 것이다.
     우리 도메인(한국 법령)에 맞게 손보면 그 모델만 튜닝을 받는 셈이라 3파전이 불공정해진다 —
-    D-021 ② 가 문자 기준을 택한 것과 같은 논리다. 튜닝은 승자가 정해진 뒤(7단계) 할 일이다.
+    RAG-021 ② 가 문자 기준을 택한 것과 같은 논리다. 튜닝은 승자가 정해진 뒤(7단계) 할 일이다.
     """
     qwen = embed.MODELS["qwen3-embedding-0.6b"]
     assert qwen.query_prompt.startswith("Instruct: Given a web search query")
@@ -45,17 +45,17 @@ def test_qwen_query_prompt_is_official() -> None:
 
 
 def test_same_dim() -> None:
-    """셋 다 1024 native 라서 나란히 비교할 수 있다 (D-002)."""
+    """셋 다 1024 native 라서 나란히 비교할 수 있다 (RAG-002)."""
     assert embed.DIM == 1024
 
 
 def test_bge_and_kure_share_limit() -> None:
-    """KURE-v1 은 bge-m3 파생이라 토크나이저와 한계가 같다 (D-021 ② 실측)."""
+    """KURE-v1 은 bge-m3 파생이라 토크나이저와 한계가 같다 (RAG-021 ② 실측)."""
     assert embed.MODELS["bge-m3"].max_tokens == embed.MODELS["kure-v1"].max_tokens == 8192
     assert embed.MODELS["qwen3-embedding-0.6b"].max_tokens == 32768
 
 
-# ---------------------------------------------------------------- 토큰 가드 (D-021 ②)
+# ---------------------------------------------------------------- 토큰 가드 (RAG-021 ②)
 def test_guard_rejects_instead_of_truncating() -> None:
     """한계를 넘으면 **실패시킨다.** 조용히 잘리면 뒷부분이 사라진 채 6단계 점수만 떨어진다.
 
@@ -67,7 +67,7 @@ def test_guard_rejects_instead_of_truncating() -> None:
 
 
 def test_guard_passes_real_chunks() -> None:
-    """실물 1,407건이 세 모델 한계 안에 있다 — D-021 ② 의 7,500자 상한이 실제로 작동한다는 확인."""
+    """실물 1,407건이 세 모델 한계 안에 있다 — RAG-021 ② 의 7,500자 상한이 실제로 작동한다는 확인."""
     rows = embed.load_chunks()
     if not rows:
         pytest.skip("chunks 가 없다 — `python -m rag chunk` 먼저")
@@ -129,7 +129,7 @@ def test_three_files_same_chunks() -> None:
 
 
 def test_skip_is_fingerprint_based() -> None:
-    """재실행 스킵은 상류 산출물의 해시로 판단한다 — 별도 상태 파일이 없다 (D-001 원칙 2)."""
+    """재실행 스킵은 상류 산출물의 해시로 판단한다 — 별도 상태 파일이 없다 (RAG-001 원칙 2)."""
     if not embed.read_meta("bge-m3"):
         pytest.skip("bge-m3.parquet 이 없다")
     assert embed.is_current("bge-m3", embed.chunks_fingerprint())
